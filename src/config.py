@@ -21,6 +21,8 @@ DEFAULTS = {
     "allow_ai_generation": False,
     "image_provider": "gemini",
     "image_model": "imagen-4.0-generate-001",
+    "allow_ai_descriptions": True,
+    "description_model": "gemini-2.5-flash",
 }
 
 
@@ -37,6 +39,8 @@ class Config:
     allow_ai_generation: bool
     image_provider: str
     image_model: str
+    allow_ai_descriptions: bool
+    description_model: str
 
     roblox_api_key: str = field(default="", repr=False)
     roblox_universe_id: str = ""

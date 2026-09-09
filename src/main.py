@@ -9,6 +9,7 @@ from . import history, queue as queue_mod
 from .analytics import AnalyticsError, fetch_thumbnail_metrics
 from .config import load_config
 from .dashboard import build_dashboard_data
+from .describer import DescriptionError, describe_image
 from .image_generator import GenerationError, generate_candidate
 from .models import ThumbnailMetrics, ThumbnailRecord
 from .prompt_builder import build_prompt, choose_source
@@ -106,7 +107,15 @@ def run() -> int:
     except Exception as exc:
         log.warning("Thumbnail image mirroring failed (continuing): %s", exc)
 
-    # 7. Persist and publish.
+    # 7. Fill in missing descriptions with Gemini vision so every creative
+    # can seed future candidates. Best-effort, never fails the run.
+    if cfg.allow_ai_descriptions and cfg.ai_image_api_key:
+        try:
+            _describe_missing(cfg, records)
+        except Exception as exc:
+            log.warning("Description generation failed (continuing): %s", exc)
+
+    # 8. Persist and publish.
     state["last_successful_run"] = timestamp
     history.save_thumbnails(records)
     history.save_state(state)
@@ -239,6 +248,20 @@ def _download_missing_images(api: RobloxApi, records: list[ThumbnailRecord]) -> 
         (queue_mod.ARCHIVE_DIR / filename).write_bytes(image)
         r.filename = filename
         log.info("Mirrored image for %s", r.thumbnail_key)
+
+
+def _describe_missing(cfg, records: list[ThumbnailRecord]) -> None:
+    for r in records:
+        if r.description.strip() or not r.filename:
+            continue
+        image_path = queue_mod.ARCHIVE_DIR / r.filename
+        if not image_path.exists():
+            continue
+        try:
+            r.description = describe_image(cfg, str(image_path))
+            log.info("Described %s: %s", r.thumbnail_key, r.description[:80])
+        except DescriptionError as exc:
+            log.warning("Could not describe %s: %s", r.thumbnail_key, exc)
 
 
 def _replenish_queue(cfg, records: list[ThumbnailRecord],

@@ -133,6 +133,34 @@ class RobloxApi:
             json_body=body,
         )
 
+    def fetch_asset_image_urls(self, asset_ids: list[str]) -> dict[str, str]:
+        """Resolve asset ids to CDN image URLs via the public thumbnails API.
+
+        Uses no credentials — thumbnails.roblox.com is public — but lives here
+        so all Roblox HTTP stays in one module."""
+        urls: dict[str, str] = {}
+        for i in range(0, len(asset_ids), 100):
+            batch = asset_ids[i:i + 100]
+            try:
+                resp = self._session.get(
+                    "https://thumbnails.roblox.com/v1/assets",
+                    params={"assetIds": ",".join(batch), "size": "768x432", "format": "Png"},
+                    timeout=60,
+                )
+                resp.raise_for_status()
+            except requests.RequestException as exc:
+                log.warning("Thumbnail image lookup failed: %s", type(exc).__name__)
+                continue
+            for item in resp.json().get("data", []):
+                if item.get("state") == "Completed" and item.get("imageUrl"):
+                    urls[str(item["targetId"])] = item["imageUrl"]
+        return urls
+
+    def download_image(self, url: str) -> bytes:
+        resp = self._session.get(url, timeout=120)
+        resp.raise_for_status()
+        return resp.content
+
     def get_operation(self, operation_path: str) -> dict:
         """Fetch a long-running analytics operation by the path the metrics
         endpoint returned (e.g. 'v1/universes/.../operations/metrics/...')."""

@@ -99,7 +99,14 @@ def run() -> int:
         except Exception as exc:
             log.error("Queue replenishment failed (continuing): %s", exc)
 
-    # 6. Persist and publish.
+    # 6. Mirror Roblox-hosted thumbnail images locally so the dashboard can
+    # show them. Best-effort: image problems never fail the run.
+    try:
+        _download_missing_images(api, records)
+    except Exception as exc:
+        log.warning("Thumbnail image mirroring failed (continuing): %s", exc)
+
+    # 7. Persist and publish.
     state["last_successful_run"] = timestamp
     history.save_thumbnails(records)
     history.save_state(state)
@@ -210,6 +217,28 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
             status="active",
         ))
         log.info("Activated %s as %s (asset %s)", candidate["filename"], key, asset_id)
+
+
+def _download_missing_images(api: RobloxApi, records: list[ThumbnailRecord]) -> None:
+    missing = [r for r in records if r.roblox_asset_id
+               and (not r.filename or not (queue_mod.ARCHIVE_DIR / r.filename).exists())]
+    if not missing:
+        return
+    urls = api.fetch_asset_image_urls([r.roblox_asset_id for r in missing])
+    queue_mod.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    for r in missing:
+        url = urls.get(r.roblox_asset_id)
+        if not url:
+            continue
+        try:
+            image = api.download_image(url)
+        except Exception as exc:
+            log.warning("Could not download image for %s: %s", r.thumbnail_key, exc)
+            continue
+        filename = r.filename or f"{r.thumbnail_key}.png"
+        (queue_mod.ARCHIVE_DIR / filename).write_bytes(image)
+        r.filename = filename
+        log.info("Mirrored image for %s", r.thumbnail_key)
 
 
 def _replenish_queue(cfg, records: list[ThumbnailRecord],

@@ -8,7 +8,7 @@
   "allow_thumbnail_uploads": false,
   "allow_ai_generation": true,
   "image_provider": "gemini",
-  "image_model": "imagen-4.0-generate-001",
+  "image_model": "gemini-3.8-flash",
   "allow_ai_descriptions": true,
   "description_model": "gemini-3.6-flash"
 }

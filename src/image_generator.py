@@ -54,7 +54,11 @@ def generate_candidate(cfg: Config, prompt: str, filename: str,
 
 
 def list_image_models(api_key: str) -> list[dict]:
-    """Return models this key may use that can produce images."""
+    """Return every model this key may use, as {name, kind}.
+
+    kind is "imagen" for the predict/generate_images path and "gemini" for
+    models that return inline image parts from generate_content.
+    """
     try:
         resp = requests.get(MODELS_URL, params={"key": api_key, "pageSize": 200}, timeout=60)
         resp.raise_for_status()
@@ -65,10 +69,9 @@ def list_image_models(api_key: str) -> list[dict]:
     for m in resp.json().get("models", []):
         name = m.get("name", "").removeprefix("models/")
         methods = m.get("supportedGenerationMethods", [])
-        lowered = name.lower()
-        if "predict" in methods and "imagen" in lowered:
+        if "predict" in methods and "imagen" in name.lower():
             models.append({"name": name, "kind": "imagen"})
-        elif "generateContent" in methods and "image" in lowered:
+        elif "generateContent" in methods:
             models.append({"name": name, "kind": "gemini"})
     return models
 
@@ -76,13 +79,16 @@ def list_image_models(api_key: str) -> list[dict]:
 def _resolve_model(cfg: Config) -> dict:
     available = list_image_models(cfg.ai_image_api_key)
     if not available:
-        raise GenerationError("This API key has no image-capable models available")
+        raise GenerationError("This API key has no usable models available")
 
+    # An explicitly configured model wins whenever the key can use it at all.
+    # Model names do not reliably advertise image support, so the config is
+    # treated as authoritative rather than second-guessed by a name heuristic.
     for m in available:
         if m["name"] == cfg.image_model:
             return m
 
-    # Prefer Imagen, then Gemini image models; newest names sort last.
+    # Otherwise fall back to models whose names do advertise image generation.
     for hint in _PREFERRED_HINTS:
         matches = sorted((m for m in available if hint in m["name"].lower()),
                          key=lambda m: m["name"])
@@ -91,7 +97,9 @@ def _resolve_model(cfg: Config) -> dict:
             log.warning("Configured image model %r unavailable; using %r",
                         cfg.image_model, chosen["name"])
             return chosen
-    return available[0]
+    raise GenerationError(
+        f"Configured image model {cfg.image_model!r} is unavailable and no "
+        f"image-capable model was found")
 
 
 def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
@@ -118,16 +126,26 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
                 raise GenerationError("Model returned no images (possibly filtered)")
             return images[0].image.image_bytes, model["name"]
 
-        response = client.models.generate_content(
-            model=model["name"],
-            contents=prompt + "\n\nProduce a 16:9 landscape image.",
-        )
+        contents = prompt + "\n\nProduce a 16:9 landscape image."
+        try:
+            response = client.models.generate_content(
+                model=model["name"], contents=contents,
+                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
+        except Exception:
+            # Some models reject an image-only modality list or the field
+            # entirely; retry with the model's default response shape.
+            response = client.models.generate_content(
+                model=model["name"], contents=contents)
+
         for candidate in response.candidates or []:
-            for part in candidate.content.parts or []:
+            for part in (candidate.content.parts or []):
                 inline = getattr(part, "inline_data", None)
                 if inline and inline.data:
                     return inline.data, model["name"]
-        raise GenerationError("Model returned no inline image data")
+        raise GenerationError(
+            f"{model['name']} returned no image data — it may not support "
+            f"image generation")
     except GenerationError:
         raise
     except Exception as exc:

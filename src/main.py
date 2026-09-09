@@ -189,8 +189,18 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
         return
     for candidate in queue_mod.list_candidates()[:open_slots]:
         pending = state.get("pending_upload") or {}
-        resuming = pending.get("filename") == candidate["filename"] and pending.get("asset_id")
+        # Any in-flight upload of this candidate must never be repeated, even
+        # if its asset has not surfaced yet.
+        resuming = pending.get("filename") == candidate["filename"]
         try:
+            if resuming and not pending.get("asset_id"):
+                log.info("%s was already uploaded and is still processing; "
+                         "waiting rather than uploading again", candidate["filename"])
+                known = {str(t.get("assetId", "")) for t in api.list_thumbnails()}
+                status = api.upload_status(pending.get("operation_id"))
+                log.info("Upload status for %s: %s",
+                         candidate["filename"], status.get("uploadStatus"))
+                continue
             if resuming:
                 # A previous run uploaded this image and moderation had not
                 # finished. Never upload it a second time.
@@ -214,19 +224,22 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
                 # by difference — the upload response carries no reliable id.
                 known = {str(t.get("assetId", t.get("thumbnailAssetId", "")))
                          for t in api.list_thumbnails()}
-                api.upload_thumbnail(str(candidate["path"]))
+                operation_id = api.upload_thumbnail(str(candidate["path"]))
+                # Record the in-flight upload immediately: if this run ends
+                # before moderation finishes, the next one must resume rather
+                # than upload the same image again.
+                state["pending_upload"] = {"filename": candidate["filename"],
+                                           "asset_id": "",
+                                           "operation_id": operation_id,
+                                           "uploaded_at": timestamp}
                 log.info("Uploaded %s; waiting for moderation", candidate["filename"])
                 try:
                     new_thumbnail = api.wait_for_new_thumbnail(known)
                 except RobloxApiError as exc:
-                    # Remember any asset that appeared so the retry resumes
-                    # rather than uploading a duplicate.
                     appeared = [str(t.get("assetId", "")) for t in api.list_thumbnails()
                                 if str(t.get("assetId", "")) not in known]
                     if appeared:
-                        state["pending_upload"] = {"filename": candidate["filename"],
-                                                   "asset_id": appeared[0],
-                                                   "uploaded_at": timestamp}
+                        state["pending_upload"]["asset_id"] = appeared[0]
                     raise exc
                 asset_id = str(new_thumbnail.get("assetId",
                                                  new_thumbnail.get("thumbnailAssetId", "")))

@@ -37,14 +37,15 @@ class RobloxApi:
         return {"x-api-key": self._api_key}
 
     def _request(self, method: str, path: str, *, json_body: dict | None = None,
-                 files: dict | None = None, timeout: int = 60) -> dict:
+                 files: dict | None = None, params: dict | None = None,
+                 timeout: int = 60) -> dict:
         url = f"{BASE_URL}{path}"
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 resp = self._session.request(
                     method, url, headers=self._headers(),
-                    json=json_body, files=files, timeout=timeout,
+                    json=json_body, files=files, params=params, timeout=timeout,
                 )
             except requests.RequestException as exc:
                 # Never include headers/keys in the log line.
@@ -100,21 +101,37 @@ class RobloxApi:
         )
         return data.get("homepageThumbnails", data.get("thumbnails", data.get("data", [])))
 
-    def upload_thumbnail(self, image_path: str) -> dict:
+    def upload_thumbnail(self, image_path: str) -> str:
+        """Upload one image and return its operation id.
+
+        The multipart field must be named `files` (plural). With any other
+        name Roblox still answers 200 but registers nothing, returning an
+        empty `fileToOperationIdDict`.
+        """
         mime = mime_for_path(image_path)
+        name = image_path.rsplit("/", 1)[-1]
         with open(image_path, "rb") as fh:
-            return self._request(
+            response = self._request(
                 "POST",
                 f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/thumbnails/uploads",
-                files={"file": (image_path.rsplit("/", 1)[-1], fh, mime)},
+                files={"files": (name, fh, mime)},
                 timeout=180,
             )
+        operations = response.get("fileToOperationIdDict") or {}
+        if not operations:
+            raise RobloxApiError(f"Roblox registered no upload for {name}")
+        return operations.get(name) or next(iter(operations.values()))
 
-    def upload_status(self) -> dict:
-        return self._request(
-            "GET",
-            f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/thumbnails/uploads/status",
-        )
+    def upload_status(self, operation_id: str | None = None) -> dict:
+        """Upload processing status, optionally for one operation.
+
+        Without operationIds the endpoint reports on nothing in particular
+        (uploadStatus 2). With it, 1 means the upload is still processing.
+        """
+        params = {"operationIds": operation_id} if operation_id else None
+        path = (f"/thumbnail-personalization-api/v1/universes/{self.universe_id}"
+                f"/thumbnails/uploads/status")
+        return self._request("GET", path, params=params)
 
     def wait_for_new_thumbnail(self, known_asset_ids: set[str], poll_seconds: int = 15,
                                timeout_seconds: int = 600) -> dict:

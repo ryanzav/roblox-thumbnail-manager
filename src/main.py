@@ -266,10 +266,11 @@ def _describe_missing(cfg, records: list[ThumbnailRecord]) -> None:
 
 def _replenish_queue(cfg, records: list[ThumbnailRecord],
                      metrics_rows: list[ThumbnailMetrics], state: dict) -> None:
-    deficit = cfg.queue_target_size - queue_mod.queue_size()
+    active_records = [r for r in records if r.status == "active"]
+    deficit = queue_mod.candidates_needed(
+        len(active_records), queue_mod.queue_size(), cfg.target_active_thumbnails)
     if deficit <= 0:
         return
-    active_records = [r for r in records if r.status == "active"]
     qptr_by_key = {m.thumbnail_key: m.qualified_ptr for m in metrics_rows
                    if m.qualified_ptr is not None}
 

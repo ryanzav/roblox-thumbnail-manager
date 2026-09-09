@@ -13,7 +13,6 @@ DEFAULTS = {
     "minimum_impressions": 1000,
     "qptr_deactivation_gap_percentage_points": 0.5,
     "target_active_thumbnails": 5,
-    "queue_target_size": 10,
     "queue_order": "fifo",
     "source_thumbnail_selection": "weighted_random",
     "allow_thumbnail_deactivation": False,
@@ -31,7 +30,6 @@ class Config:
     minimum_impressions: int
     qptr_deactivation_gap_percentage_points: float
     target_active_thumbnails: int
-    queue_target_size: int
     queue_order: str
     source_thumbnail_selection: str
     allow_thumbnail_deactivation: bool

@@ -431,25 +431,32 @@ Never delete the only local copy of a thumbnail simply because it was removed fr
 
 After the thumbnail-management portion of each run, the script checks the queue.
 
-If the queue is below a configurable target size:
+Generation is **demand-driven**: a candidate is only generated when there is an
+open active slot for it. The script generates enough images to fill the open
+slots, counting candidates already waiting in the queue:
 
 ```text
-queue_target_size
+generate = (target_active_thumbnails - active count) - queued count
 ```
 
-the AI image generator creates enough candidates to replenish it.
-
-Example:
+Examples:
 
 ```text
-queue_target_size = 10
-
-Current queue = 6
-
-Generate 4 new images
+5 active, 0 queued   ->  generate 0   (no slot to fill)
+4 active, 0 queued   ->  generate 1
+3 active, 1 queued   ->  generate 1
+3 active, 2 queued   ->  generate 0   (already covered)
 ```
 
-The queue target is configurable because AI image generation has a cost.
+This keeps AI image generation cost proportional to actual need and keeps
+candidates fresh, since each one is bred from whichever thumbnails are winning
+at the time it is generated rather than sitting in a buffer while the leaders
+change.
+
+Note the ordering consequence: queued candidates are activated earlier in the
+same run, before replenishment. When an evaluation deactivates several
+thumbnails at once, the queue may not cover every slot immediately, so the
+newly opened slots are filled over the following runs rather than all at once.
 
 Generation should not block metric collection. If AI image generation fails, the metrics/history/dashboard portion of the scheduled run should still succeed whenever possible.
 
@@ -1197,7 +1204,6 @@ Never commit:
   "minimum_impressions": 1000,
   "qptr_deactivation_gap_percentage_points": 0.5,
   "target_active_thumbnails": 5,
-  "queue_target_size": 10,
   "queue_order": "fifo",
   "source_thumbnail_selection": "weighted_random",
   "allow_thumbnail_deactivation": true,

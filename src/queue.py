@@ -74,3 +74,15 @@ def archive_candidate(candidate: dict, final_filename: str,
 
 def queue_size(queue_dir: Path = QUEUE_DIR) -> int:
     return len(list_candidates(queue_dir))
+
+
+def candidates_needed(active_count: int, queued_count: int,
+                      target_active: int) -> int:
+    """How many candidates to generate: enough to fill the open active slots,
+    counting candidates already waiting in the queue.
+
+    Generation is demand-driven — a candidate is only worth paying for when
+    there is a slot for it — so a full active set generates nothing.
+    """
+    open_slots = target_active - active_count
+    return max(0, open_slots - queued_count)

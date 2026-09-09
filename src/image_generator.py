@@ -10,6 +10,7 @@ entry — nothing else in the project should know provider details.
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -17,6 +18,7 @@ import requests
 from .config import Config
 from .imaging import detect_format
 from . import queue as queue_mod
+from .usage import append_usage
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +34,15 @@ class GenerationError(Exception):
     pass
 
 
+class EmptyGenerationError(GenerationError):
+    """The model answered but produced no image.
+
+    Distinct from a permanent failure (missing key, unusable model) because
+    it is usually transient: a safety filter tripping on one phrasing, or
+    momentary capacity pressure. Worth retrying; the rest is not.
+    """
+
+
 def generate_candidate(cfg: Config, prompt: str, stem: str,
                        description: str, source_thumbnail_id: str) -> str:
     """Generate one 16:9 candidate, save it into the queue, return filename.
@@ -39,10 +50,22 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
     The extension comes from the returned image data, not from the caller,
     because providers differ in the format they produce.
     """
-    if cfg.image_provider == "gemini":
-        image_bytes, model_used = _generate_gemini(cfg, prompt)
-    else:
+    if cfg.image_provider != "gemini":
         raise GenerationError(f"Unknown image provider: {cfg.image_provider}")
+
+    attempts = max(1, cfg.generation_retries)
+    for attempt in range(1, attempts + 1):
+        try:
+            image_bytes, model_used, usage = _generate_gemini(cfg, prompt)
+            break
+        except EmptyGenerationError as exc:
+            if attempt == attempts:
+                raise GenerationError(
+                    f"{exc} (after {attempts} attempts)") from exc
+            delay = 2 ** attempt
+            log.warning("%s; retrying in %ds (attempt %d/%d)",
+                        exc, delay, attempt + 1, attempts)
+            time.sleep(delay)
 
     filename = stem + detect_format(image_bytes)[0]
 
@@ -55,8 +78,18 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
         "model": model_used,
         "filename": filename,
         "status": "queued",
+        **usage,
+        "estimated_cost_usd": cfg.image_cost_usd or None,
     }
-    queue_mod.write_candidate(image_bytes, filename, metadata)
+    queue_mod.write_candidate(image_bytes, filename, metadata, queue_mod.QUEUE_DIR)
+    append_usage({
+        "timestamp": metadata["generated_at"],
+        "filename": filename,
+        "model": model_used,
+        "source_thumbnail_id": source_thumbnail_id,
+        "estimated_cost_usd": cfg.image_cost_usd or "",
+        **usage,
+    })
     return filename
 
 
@@ -120,7 +153,7 @@ def _resolve_model(cfg: Config) -> dict:
         f"image-capable model was found")
 
 
-def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
+def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str, dict]:
     if not cfg.ai_image_api_key:
         raise GenerationError("AI_IMAGE_API_KEY is not set")
     try:
@@ -141,8 +174,9 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
             )
             images = response.generated_images or []
             if not images:
-                raise GenerationError("Model returned no images (possibly filtered)")
-            return images[0].image.image_bytes, model["name"]
+                raise EmptyGenerationError(
+                    f"{model['name']} returned no images (possibly filtered)")
+            return images[0].image.image_bytes, model["name"], _usage(response)
 
         contents = prompt + "\n\nProduce a 16:9 landscape image."
         try:
@@ -160,13 +194,27 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
             for part in (candidate.content.parts or []):
                 inline = getattr(part, "inline_data", None)
                 if inline and inline.data:
-                    return inline.data, model["name"]
-        raise GenerationError(
-            f"{model['name']} returned no image data — it may not support "
-            f"image generation. Image-capable models on this key: "
-            f"{_image_capable_names(cfg) or 'none found'}")
+                    return inline.data, model["name"], _usage(response)
+        raise EmptyGenerationError(
+            f"{model['name']} returned no image data")
     except GenerationError:
         raise
     except Exception as exc:
         raise GenerationError(
             f"Generation failed on {model['name']}: {type(exc).__name__}: {exc}") from exc
+
+
+def _usage(response) -> dict:
+    """Token counts for one generation, when the provider reports them."""
+    um = getattr(response, "usage_metadata", None)
+    if um is None:
+        return {}
+    fields = {"prompt_tokens": "prompt_token_count",
+              "output_tokens": "candidates_token_count",
+              "total_tokens": "total_token_count"}
+    out = {}
+    for name, attr in fields.items():
+        value = getattr(um, attr, None)
+        if value is not None:
+            out[name] = int(value)
+    return out

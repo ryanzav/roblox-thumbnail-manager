@@ -12,6 +12,7 @@ from .dashboard import build_dashboard_data
 from .describer import DescriptionError, describe_image
 from .image_generator import GenerationError, generate_candidate
 from .models import ThumbnailMetrics, ThumbnailRecord
+from .notify import notify_new_image
 from .prompt_builder import build_prompt, choose_source
 from .roblox_api import RobloxApi, RobloxApiError
 from .selector import choose_changes, eligible_source_keys
@@ -369,6 +370,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
                                           description=source.description,
                                           source_thumbnail_id=source.thumbnail_key)
             log.info("Generated %s from %s", filename, source.thumbnail_key)
+            notify_new_image(cfg, queue_mod.QUEUE_DIR / filename)
             generated += 1
         except GenerationError as exc:
             log.error("Generation failed for %s: %s", stem, exc)

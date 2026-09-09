@@ -10,6 +10,7 @@ from . import queue as queue_mod
 from .config import REPO_ROOT, Config
 from .history import METRICS_CSV, THUMBNAILS_CSV
 from .imaging import IMAGE_EXTENSIONS
+from .usage import summarize
 from .models import ThumbnailMetrics, ThumbnailRecord
 
 DOCS_DATA_DIR = REPO_ROOT / "docs" / "data"
@@ -47,6 +48,7 @@ def build_dashboard_data(cfg: Config, metrics: list[ThumbnailMetrics],
         "best_qptr": best,
         "evaluation_status": evaluation_status,
         "gate_impressions": cfg.minimum_impressions,
+        "usage": summarize(budget_usd=cfg.image_budget_usd),
     }
     (docs_data_dir / "latest.json").write_text(json.dumps(latest, indent=2) + "\n")
 
@@ -71,6 +73,8 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
             "source_thumbnail_id": c["source_thumbnail_id"],
             "provider": c["provider"],
             "model": c["model"],
+            "total_tokens": c.get("total_tokens", ""),
+            "estimated_cost_usd": c.get("estimated_cost_usd", ""),
         })
 
     docs_data_dir.mkdir(parents=True, exist_ok=True)

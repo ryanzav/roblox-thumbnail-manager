@@ -77,6 +77,13 @@ function renderOverview(latest, thumbs, latestByKey) {
     ["Best current qPTR", latest.best_qptr != null ? fmtPct(latest.best_qptr) : "—"],
     ["Evaluation", latest.evaluation_status || "—"],
   ];
+  const u = latest.usage;
+  if (u && u.images_generated) {
+    stats.push(["AI images", `${u.images_generated}`]);
+    if (u.estimated_spend_usd) stats.push(["Est. spend", `$${u.estimated_spend_usd.toFixed(2)}`]);
+    if (u.estimated_remaining_usd != null)
+      stats.push(["Est. remaining", `$${u.estimated_remaining_usd.toFixed(2)}`]);
+  }
   el.innerHTML = stats.map(([label, value]) =>
     `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`).join("");
 }
@@ -155,6 +162,8 @@ function renderQueue(queue) {
         <tr><td class="muted">Generated</td><td>${fmtDate(c.generated_at)}</td></tr>
         <tr><td class="muted">Model</td><td>${c.model || "—"}</td></tr>
         <tr><td class="muted">Source</td><td>${c.source_thumbnail_id || "—"}</td></tr>
+        ${c.total_tokens ? `<tr><td class="muted">Tokens</td><td>${Number(c.total_tokens).toLocaleString()}</td></tr>` : ""}
+        ${c.estimated_cost_usd ? `<tr><td class="muted">Est. cost</td><td>$${Number(c.estimated_cost_usd).toFixed(3)}</td></tr>` : ""}
       </table>
       ${c.prompt ? `<details class="prompt"><summary>Prompt</summary>${c.prompt}</details>` : ""}
     </div>

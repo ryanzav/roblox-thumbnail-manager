@@ -22,6 +22,9 @@ DEFAULTS = {
     "image_model": "gemini-3-pro-image",
     "allow_ai_descriptions": True,
     "description_model": "gemini-3.6-flash",
+    "generation_retries": 3,
+    "image_cost_usd": 0.0,
+    "image_budget_usd": 0.0,
 }
 
 
@@ -39,10 +42,18 @@ class Config:
     image_model: str
     allow_ai_descriptions: bool
     description_model: str
+    generation_retries: int
+    image_cost_usd: float
+    image_budget_usd: float
 
     roblox_api_key: str = field(default="", repr=False)
     roblox_universe_id: str = ""
     ai_image_api_key: str = field(default="", repr=False)
+    notify_email: str = ""
+    smtp_user: str = ""
+    smtp_password: str = field(default="", repr=False)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
 
     @property
     def qptr_gap_decimal(self) -> float:
@@ -62,4 +73,9 @@ def load_config(path: Path | None = None) -> Config:
     cfg.roblox_api_key = os.environ.get("ROBLOX_API_KEY", "")
     cfg.roblox_universe_id = os.environ.get("ROBLOX_UNIVERSE_ID", "")
     cfg.ai_image_api_key = os.environ.get("AI_IMAGE_API_KEY", "")
+    cfg.notify_email = os.environ.get("NOTIFY_EMAIL", "")
+    cfg.smtp_user = os.environ.get("SMTP_USER", "")
+    cfg.smtp_password = os.environ.get("SMTP_PASSWORD", "")
+    cfg.smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    cfg.smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     return cfg

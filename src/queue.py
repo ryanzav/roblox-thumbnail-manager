@@ -46,6 +46,8 @@ def list_candidates(queue_dir: Path = QUEUE_DIR) -> list[dict]:
             "source_thumbnail_id": meta.get("source_thumbnail_id", ""),
             "provider": meta.get("provider", ""),
             "model": meta.get("model", ""),
+            "total_tokens": meta.get("total_tokens", ""),
+            "estimated_cost_usd": meta.get("estimated_cost_usd", ""),
         })
     candidates.sort(key=lambda c: (c["generated_at"] or "9999", c["filename"]))
     return candidates

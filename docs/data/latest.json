@@ -1,9 +1,16 @@
 {
-  "last_update": "2026-09-09T13:10:41Z",
-  "active_count": 3,
+  "last_update": "2026-09-09T13:21:51Z",
+  "active_count": 5,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": 0.032700035721063614,
-  "evaluation_status": "evaluation performed",
-  "gate_impressions": 1000
+  "best_qptr": 0.031942978501319885,
+  "evaluation_status": "gate closed: Roblox reports no analytics for thumb-013",
+  "gate_impressions": 1000,
+  "usage": {
+    "images_generated": 2,
+    "total_tokens": 3205,
+    "estimated_spend_usd": 0.0,
+    "budget_usd": null,
+    "estimated_remaining_usd": null
+  }
 }

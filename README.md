@@ -1430,17 +1430,26 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
+
+# Generated candidates are working files, not repository content.
+thumbnails/queue/*
+!thumbnails/queue/.gitkeep
 ```
 
 Do **not** ignore:
 
 ```text
 data/
-thumbnails/queue/
 docs/
 ```
 
 Those directories are intentionally persisted through Git.
+
+`thumbnails/queue/` is **not** persisted. Candidates are working files: a
+generated image is normally uploaded and activated in the same run, and the
+copy that matters afterwards lives in `docs/images/thumbnails/`. A candidate
+that is generated but not activated - because moderation is still pending, for
+example - does not survive to the next run and is simply regenerated.
 
 ---
 

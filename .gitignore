@@ -6,3 +6,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
+
+# Generated candidates are working files, not repository content.
+thumbnails/queue/*
+!thumbnails/queue/.gitkeep

@@ -119,7 +119,8 @@ def run() -> int:
     state["last_successful_run"] = timestamp
     history.save_thumbnails(records)
     history.save_state(state)
-    build_dashboard_data(cfg, metrics_rows, evaluation_status, queue_mod.queue_size())
+    build_dashboard_data(cfg, metrics_rows, evaluation_status, queue_mod.queue_size(),
+                         records=records)
     log.info("Run complete. Evaluation: %s", evaluation_status)
     return 0
 

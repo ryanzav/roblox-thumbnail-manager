@@ -10,7 +10,7 @@ from . import queue as queue_mod
 from .config import REPO_ROOT, Config
 from .history import METRICS_CSV, THUMBNAILS_CSV
 from .imaging import IMAGE_EXTENSIONS
-from .models import ThumbnailMetrics
+from .models import ThumbnailMetrics, ThumbnailRecord
 
 DOCS_DATA_DIR = REPO_ROOT / "docs" / "data"
 DOCS_QUEUE_IMAGE_DIR = REPO_ROOT / "docs" / "images" / "queue"
@@ -19,21 +19,29 @@ LATEST_JSON = DOCS_DATA_DIR / "latest.json"
 
 def build_dashboard_data(cfg: Config, metrics: list[ThumbnailMetrics],
                          evaluation_status: str, queue_count: int,
-                         docs_data_dir: Path = DOCS_DATA_DIR) -> None:
+                         docs_data_dir: Path = DOCS_DATA_DIR,
+                         records: list[ThumbnailRecord] | None = None) -> None:
     docs_data_dir.mkdir(parents=True, exist_ok=True)
 
     for src in (METRICS_CSV, THUMBNAILS_CSV):
         if src.exists():
             shutil.copy2(src, docs_data_dir / src.name)
 
-    active = [m for m in metrics if m.status == "active"]
+    # Count from the registry, not the metrics snapshot: metrics are collected
+    # before this run's activations, so a thumbnail activated moments ago is
+    # already active but has no row yet.
+    if records is not None:
+        active_keys = {r.thumbnail_key for r in records if r.status == "active"}
+    else:
+        active_keys = {m.thumbnail_key for m in metrics if m.status == "active"}
+    active = [m for m in metrics if m.thumbnail_key in active_keys]
     best = max((m.qualified_ptr for m in active if m.qualified_ptr is not None), default=None)
 
     publish_queue_preview(docs_data_dir)
 
     latest = {
         "last_update": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "active_count": len(active),
+        "active_count": len(active_keys),
         "target_active": cfg.target_active_thumbnails,
         "queue_size": queue_count,
         "best_qptr": best,

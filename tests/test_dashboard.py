@@ -43,3 +43,41 @@ def test_build_dashboard_data_no_metrics(tmp_path, monkeypatch):
     latest = json.loads((docs_data / "latest.json").read_text())
     assert latest["active_count"] == 0
     assert latest["best_qptr"] is None
+
+
+def test_active_count_includes_thumbnails_activated_this_run(tmp_path, monkeypatch):
+    from src.models import ThumbnailRecord
+    monkeypatch.setattr(dashboard, "METRICS_CSV", tmp_path / "m.csv")
+    monkeypatch.setattr(dashboard, "THUMBNAILS_CSV", tmp_path / "t.csv")
+    docs_data = tmp_path / "docs" / "data"
+
+    # Metrics were collected before this run activated thumb-002, so it has
+    # no metrics row yet -- but it is active and must be counted.
+    metrics = [ThumbnailMetrics("thumb-001", "1", "active",
+                                impressions=5000, qualified_ptr=0.03)]
+    records = [ThumbnailRecord(thumbnail_key="thumb-001", status="active"),
+               ThumbnailRecord(thumbnail_key="thumb-002", status="active")]
+
+    dashboard.build_dashboard_data(make_config(), metrics, "ok", 0, docs_data,
+                                   records=records)
+    latest = json.loads((docs_data / "latest.json").read_text())
+    assert latest["active_count"] == 2
+
+
+def test_best_qptr_ignores_thumbnails_no_longer_active(tmp_path, monkeypatch):
+    from src.models import ThumbnailRecord
+    monkeypatch.setattr(dashboard, "METRICS_CSV", tmp_path / "m.csv")
+    monkeypatch.setattr(dashboard, "THUMBNAILS_CSV", tmp_path / "t.csv")
+    docs_data = tmp_path / "docs" / "data"
+
+    metrics = [ThumbnailMetrics("thumb-001", "1", "active", impressions=5000, qualified_ptr=0.03),
+               ThumbnailMetrics("thumb-002", "2", "active", impressions=5000, qualified_ptr=0.09)]
+    # thumb-002 was deactivated during this run.
+    records = [ThumbnailRecord(thumbnail_key="thumb-001", status="active"),
+               ThumbnailRecord(thumbnail_key="thumb-002", status="inactive")]
+
+    dashboard.build_dashboard_data(make_config(), metrics, "ok", 0, docs_data,
+                                   records=records)
+    latest = json.loads((docs_data / "latest.json").read_text())
+    assert latest["active_count"] == 1
+    assert latest["best_qptr"] == 0.03

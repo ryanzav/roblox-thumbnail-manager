@@ -41,8 +41,12 @@ def fetch_thumbnail_metrics(api: RobloxApi, asset_ids: list[str],
     Raises AnalyticsError when the analytics API cannot be queried at all —
     callers must treat that as "make no performance-based decision".
     """
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=lookback_days)
+    # Day buckets are half-open: an endTime of today 00:00 excludes today
+    # entirely, hiding every thumbnail whose traffic only started today.
+    # End on tomorrow 00:00 so the current day is included.
+    now = datetime.now(timezone.utc)
+    end = now + timedelta(days=1)
+    start = now - timedelta(days=lookback_days)
 
     results: dict[str, ThumbnailMetrics] = {
         asset_id: ThumbnailMetrics(thumbnail_key="", roblox_asset_id=asset_id, status="")

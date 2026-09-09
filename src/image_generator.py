@@ -18,7 +18,6 @@ import requests
 from .config import Config
 from .imaging import detect_format
 from . import queue as queue_mod
-from .usage import append_usage
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
     attempts = max(1, cfg.generation_retries)
     for attempt in range(1, attempts + 1):
         try:
-            image_bytes, model_used, usage = _generate_gemini(cfg, prompt)
+            image_bytes, model_used = _generate_gemini(cfg, prompt)
             break
         except EmptyGenerationError as exc:
             if attempt == attempts:
@@ -78,18 +77,8 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
         "model": model_used,
         "filename": filename,
         "status": "queued",
-        **usage,
-        "estimated_cost_usd": cfg.image_cost_usd or None,
     }
     queue_mod.write_candidate(image_bytes, filename, metadata, queue_mod.QUEUE_DIR)
-    append_usage({
-        "timestamp": metadata["generated_at"],
-        "filename": filename,
-        "model": model_used,
-        "source_thumbnail_id": source_thumbnail_id,
-        "estimated_cost_usd": cfg.image_cost_usd or "",
-        **usage,
-    })
     return filename
 
 
@@ -153,7 +142,7 @@ def _resolve_model(cfg: Config) -> dict:
         f"image-capable model was found")
 
 
-def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str, dict]:
+def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
     if not cfg.ai_image_api_key:
         raise GenerationError("AI_IMAGE_API_KEY is not set")
     try:
@@ -176,7 +165,7 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str, dict]:
             if not images:
                 raise EmptyGenerationError(
                     f"{model['name']} returned no images (possibly filtered)")
-            return images[0].image.image_bytes, model["name"], _usage(response)
+            return images[0].image.image_bytes, model["name"]
 
         contents = prompt + "\n\nProduce a 16:9 landscape image."
         try:
@@ -194,7 +183,7 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str, dict]:
             for part in (candidate.content.parts or []):
                 inline = getattr(part, "inline_data", None)
                 if inline and inline.data:
-                    return inline.data, model["name"], _usage(response)
+                    return inline.data, model["name"]
         raise EmptyGenerationError(
             f"{model['name']} returned no image data")
     except GenerationError:
@@ -203,18 +192,3 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str, dict]:
         raise GenerationError(
             f"Generation failed on {model['name']}: {type(exc).__name__}: {exc}") from exc
 
-
-def _usage(response) -> dict:
-    """Token counts for one generation, when the provider reports them."""
-    um = getattr(response, "usage_metadata", None)
-    if um is None:
-        return {}
-    fields = {"prompt_tokens": "prompt_token_count",
-              "output_tokens": "candidates_token_count",
-              "total_tokens": "total_token_count"}
-    out = {}
-    for name, attr in fields.items():
-        value = getattr(um, attr, None)
-        if value is not None:
-            out[name] = int(value)
-    return out

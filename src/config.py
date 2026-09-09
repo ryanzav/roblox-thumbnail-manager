@@ -23,8 +23,6 @@ DEFAULTS = {
     "allow_ai_descriptions": True,
     "description_model": "gemini-3.6-flash",
     "generation_retries": 3,
-    "image_cost_usd": 0.0,
-    "image_budget_usd": 0.0,
 }
 
 
@@ -43,8 +41,6 @@ class Config:
     allow_ai_descriptions: bool
     description_model: str
     generation_retries: int
-    image_cost_usd: float
-    image_budget_usd: float
 
     roblox_api_key: str = field(default="", repr=False)
     roblox_universe_id: str = ""

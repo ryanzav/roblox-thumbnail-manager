@@ -15,7 +15,6 @@ def make_cfg(**over):
 @pytest.fixture(autouse=True)
 def isolate(monkeypatch, tmp_path):
     monkeypatch.setattr(ig.time, "sleep", lambda s: None)
-    monkeypatch.setattr(ig, "append_usage", lambda row: None)
 
 
 def attempts_then(results):
@@ -27,7 +26,7 @@ def attempts_then(results):
         outcome = results[min(calls["n"] - 1, len(results) - 1)]
         if isinstance(outcome, Exception):
             raise outcome
-        return outcome, "gemini-3-pro-image", {"total_tokens": 42}
+        return outcome, "gemini-3-pro-image"
 
     return fake, calls
 

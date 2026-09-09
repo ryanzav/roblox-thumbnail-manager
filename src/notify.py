@@ -63,10 +63,6 @@ def _body(filename: str, meta: dict) -> str:
         ("Model", meta.get("model", "")),
         ("Provider", meta.get("provider", "")),
         ("Source thumbnail", meta.get("source_thumbnail_id", "")),
-        ("Prompt tokens", meta.get("prompt_tokens", "")),
-        ("Output tokens", meta.get("output_tokens", "")),
-        ("Total tokens", meta.get("total_tokens", "")),
-        ("Estimated cost (USD)", meta.get("estimated_cost_usd", "")),
     ]
     lines = [f"{label}: {value}" for label, value in rows if value not in ("", None)]
     if meta.get("description"):

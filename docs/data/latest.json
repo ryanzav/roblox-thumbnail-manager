@@ -5,12 +5,5 @@
   "queue_size": 0,
   "best_qptr": 0.031942978501319885,
   "evaluation_status": "gate closed: Roblox reports no analytics for thumb-013",
-  "gate_impressions": 1000,
-  "usage": {
-    "images_generated": 2,
-    "total_tokens": 3205,
-    "estimated_spend_usd": 0.0,
-    "budget_usd": null,
-    "estimated_remaining_usd": null
-  }
+  "gate_impressions": 1000
 }

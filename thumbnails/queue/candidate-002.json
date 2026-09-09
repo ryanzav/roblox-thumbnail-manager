@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-09-09T13:14:42Z",
+  "prompt": "p",
+  "description": "d",
+  "source_thumbnail_id": "s",
+  "provider": "gemini",
+  "model": "gemini-3-pro-image",
+  "filename": "candidate-002.png",
+  "status": "queued"
+}

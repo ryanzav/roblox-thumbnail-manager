@@ -11,7 +11,5 @@
   "image_model": "gemini-3-pro-image",
   "allow_ai_descriptions": true,
   "description_model": "gemini-3.6-flash",
-  "generation_retries": 3,
-  "image_cost_usd": 0.0,
-  "image_budget_usd": 0.0
+  "generation_retries": 3
 }

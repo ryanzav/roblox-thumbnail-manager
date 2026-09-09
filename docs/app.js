@@ -42,10 +42,11 @@ async function fetchText(url) {
 }
 
 async function main() {
-  let metrics = [], thumbs = [], latest = {};
+  let metrics = [], thumbs = [], latest = {}, queue = [];
   try { metrics = parseCSV(await fetchText("data/metrics.csv")); } catch (e) { console.warn(e); }
   try { thumbs = parseCSV(await fetchText("data/thumbnails.csv")); } catch (e) { console.warn(e); }
   try { latest = JSON.parse(await fetchText("data/latest.json")); } catch (e) { console.warn(e); }
+  try { queue = JSON.parse(await fetchText("data/queue.json")); } catch (e) { console.warn(e); }
 
   const latestByKey = {};
   for (const m of metrics) {
@@ -56,6 +57,7 @@ async function main() {
   renderOverview(latest, thumbs, latestByKey);
   renderGateBanner(latest, latestByKey, thumbs);
   renderActiveCards(thumbs, latestByKey);
+  renderQueue(queue);
   renderLeaderboard(thumbs, latestByKey);
   renderCharts(metrics);
   renderLineage(thumbs);
@@ -133,6 +135,30 @@ function renderActiveCards(thumbs, latestByKey) {
   el.innerHTML = active.length
     ? active.map(t => cardHTML(t, latestByKey[t.thumbnail_key])).join("")
     : `<p class="muted">No active thumbnails tracked yet.</p>`;
+}
+
+function renderQueue(queue) {
+  document.getElementById("queue-count").textContent =
+    queue.length ? `(${queue.length})` : "";
+  const el = document.getElementById("queue-cards");
+  if (!queue.length) {
+    el.innerHTML = `<p class="muted">Queue is empty — no candidates generated yet.</p>`;
+    return;
+  }
+  el.innerHTML = queue.map(c => `<div class="card">
+    <img src="images/queue/${c.filename}" alt="${c.filename}"
+      onerror="this.outerHTML='<div class=&quot;no-image&quot;>no image</div>'">
+    <div class="body">
+      <div class="status queued">QUEUED</div>
+      <div class="desc">${c.filename}</div>
+      <table>
+        <tr><td class="muted">Generated</td><td>${fmtDate(c.generated_at)}</td></tr>
+        <tr><td class="muted">Model</td><td>${c.model || "—"}</td></tr>
+        <tr><td class="muted">Source</td><td>${c.source_thumbnail_id || "—"}</td></tr>
+      </table>
+      ${c.prompt ? `<details class="prompt"><summary>Prompt</summary>${c.prompt}</details>` : ""}
+    </div>
+  </div>`).join("");
 }
 
 function renderLeaderboard(thumbs, latestByKey) {

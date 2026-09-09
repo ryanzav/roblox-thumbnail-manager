@@ -14,7 +14,9 @@ def make_cfg(**over):
 
 @pytest.fixture(autouse=True)
 def isolate(monkeypatch, tmp_path):
+    """Never let a test write into the repository's real queue directory."""
     monkeypatch.setattr(ig.time, "sleep", lambda s: None)
+    monkeypatch.setattr(ig.queue_mod, "QUEUE_DIR", tmp_path)
 
 
 def attempts_then(results):
@@ -73,3 +75,14 @@ def test_succeeds_first_try_without_retrying(monkeypatch, tmp_path):
 
     ig.generate_candidate(make_cfg(), "p", "candidate-002", "d", "s")
     assert calls["n"] == 1
+
+
+def test_generation_never_writes_to_the_real_queue(monkeypatch, tmp_path):
+    # A stub image escaping into thumbnails/queue/ would be uploaded to
+    # Roblox as a real thumbnail on the next run.
+    from src.config import REPO_ROOT
+    fake, _ = attempts_then([PNG])
+    monkeypatch.setattr(ig, "_generate_gemini", fake)
+    ig.generate_candidate(make_cfg(), "p", "candidate-999", "d", "s")
+    assert not (REPO_ROOT / "thumbnails" / "queue" / "candidate-999.png").exists()
+    assert (tmp_path / "candidate-999.png").exists()

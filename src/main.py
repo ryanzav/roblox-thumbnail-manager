@@ -66,7 +66,18 @@ def run() -> int:
                         else status_by_asset.get(asset_id, "inactive"))
             metrics_rows.append(m)
         history.append_metrics(timestamp, metrics_rows)
-        log.info("Recorded metrics for %d thumbnails", len(metrics_rows))
+        measured = [m for m in metrics_rows if m.trustworthy]
+        log.info("Recorded metrics for %d thumbnails (%d with data)",
+                 len(metrics_rows), len(measured))
+        # Roblox returns no analytics rows at all for a thumbnail that has
+        # received no traffic, which is indistinguishable from a lookup miss
+        # unless it is called out explicitly.
+        blank = [m for m in metrics_rows
+                 if m.status == "active" and not m.trustworthy]
+        if blank:
+            log.warning("Roblox returned no analytics for active thumbnail(s): %s",
+                        ", ".join(sorted(m.thumbnail_key or m.roblox_asset_id
+                                         for m in blank)))
     except AnalyticsError as exc:
         log.error("Analytics unavailable: %s — no performance-based decisions", exc)
         evaluation_status = "analytics unavailable; evaluation skipped"

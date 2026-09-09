@@ -59,3 +59,19 @@ def test_multiple_weak_removed():
     ])
     assert result.eligible
     assert {t.thumbnail_key for t in result.deactivate} == {"c", "d"}
+
+
+def test_gate_message_names_thumbnails_without_analytics():
+    missing = ThumbnailMetrics(thumbnail_key="thumb-002", roblox_asset_id="x",
+                               status="active", impressions=None, qualified_ptr=None)
+    result = choose_changes([tm("thumb-001", 5000, 0.03), missing])
+    assert not result.eligible
+    assert "thumb-002" in result.reason
+    assert "no analytics" in result.reason
+
+
+def test_gate_message_names_thumbnails_below_the_impression_gate():
+    result = choose_changes([tm("thumb-001", 5000, 0.03), tm("thumb-011", 12, 0.02)])
+    assert not result.eligible
+    assert "thumb-011" in result.reason
+    assert "12" in result.reason

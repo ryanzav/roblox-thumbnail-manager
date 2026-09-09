@@ -38,16 +38,23 @@ def choose_changes(active_thumbnails: list[ThumbnailMetrics],
     if not active_thumbnails:
         return SelectionResult(eligible=False, reason="no active thumbnails")
 
-    if any(not t.trustworthy for t in active_thumbnails):
+    unmeasured = [t for t in active_thumbnails if not t.trustworthy]
+    if unmeasured:
+        names = ", ".join(sorted(t.thumbnail_key or t.roblox_asset_id
+                                 for t in unmeasured))
         return SelectionResult(
             eligible=False,
-            reason="missing metrics for at least one active thumbnail; gate closed",
+            reason=f"gate closed: Roblox reports no analytics for {names}",
         )
 
-    if any(t.impressions < minimum_impressions for t in active_thumbnails):
+    below = [t for t in active_thumbnails if t.impressions < minimum_impressions]
+    if below:
+        names = ", ".join(f"{t.thumbnail_key or t.roblox_asset_id} "
+                          f"({t.impressions:,})" for t in
+                          sorted(below, key=lambda t: t.impressions))
         return SelectionResult(
             eligible=False,
-            reason=f"waiting for all active thumbnails to reach {minimum_impressions} impressions",
+            reason=f"waiting for {minimum_impressions:,} impressions: {names}",
         )
 
     best_qptr = max(t.qualified_ptr for t in active_thumbnails)

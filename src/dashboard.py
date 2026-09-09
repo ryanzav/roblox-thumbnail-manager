@@ -1,6 +1,7 @@
 """Prepares the data consumed by the static GitHub Pages dashboard."""
 
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,18 +51,12 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
     Roblox yet, so these images live only in the repo until activation.
     """
     candidates = queue_mod.list_candidates(queue_mod.QUEUE_DIR)
-    queue_image_dir.mkdir(parents=True, exist_ok=True)
-
-    current = {c["filename"] for c in candidates}
-    for stale in queue_image_dir.iterdir():
-        if stale.suffix.lower() in IMAGE_EXTENSIONS and stale.name not in current:
-            stale.unlink()
 
     entries = []
     for c in candidates:
-        shutil.copy2(c["path"], queue_image_dir / c["filename"])
         entries.append({
             "filename": c["filename"],
+            "url": queue_image_url(c["filename"]),
             "generated_at": c["generated_at"],
             "prompt": c["prompt"],
             "description": c["description"],
@@ -73,3 +68,17 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
     docs_data_dir.mkdir(parents=True, exist_ok=True)
     (docs_data_dir / "queue.json").write_text(json.dumps(entries, indent=2) + "\n")
     return entries
+
+
+def queue_image_url(filename: str) -> str:
+    """Where the dashboard should load a queued candidate from.
+
+    Queued images live only in thumbnails/queue/, which GitHub Pages does not
+    publish (it serves docs/ alone), so the dashboard reads them straight from
+    the repository instead of keeping a second copy under docs/.
+    """
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    branch = os.environ.get("GITHUB_REF_NAME", "main")
+    if repo:
+        return f"https://raw.githubusercontent.com/{repo}/{branch}/thumbnails/queue/{filename}"
+    return f"../thumbnails/queue/{filename}"

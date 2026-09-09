@@ -146,7 +146,7 @@ function renderQueue(queue) {
     return;
   }
   el.innerHTML = queue.map(c => `<div class="card">
-    <img src="images/queue/${c.filename}" alt="${c.filename}"
+    <img src="${c.url || `images/queue/${c.filename}`}" alt="${c.filename}"
       onerror="this.outerHTML='<div class=&quot;no-image&quot;>no image</div>'">
     <div class="body">
       <div class="status queued">QUEUED</div>

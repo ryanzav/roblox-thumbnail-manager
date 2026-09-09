@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "filename": "candidate-027.png",
+    "generated_at": "2026-09-09T03:23:39Z",
+    "prompt": "Create an incredibly cute, high quality Roblox game thumbnail.\nA cute, fluffy light-green caterpillar with huge glossy green eyes, rosy cheeks, and curved antennae smiles softly in an eye-level, centered macro shot. Rendered in a whimsical 3D digital art style, the scene is bathed in warm golden sunlight amidst a lush, colorful field of soft-focused wildflowers.\nMake it attractive at Roblox thumbnail size.\n16:9 composition. No text unless specifically requested.",
+    "description": "A cute, fluffy light-green caterpillar with huge glossy green eyes, rosy cheeks, and curved antennae smiles softly in an eye-level, centered macro shot. Rendered in a whimsical 3D digital art style, the scene is bathed in warm golden sunlight amidst a lush, colorful field of soft-focused wildflowers.",
+    "source_thumbnail_id": "thumb-001",
+    "provider": "gemini",
+    "model": "gemini-3-pro-image"
+  }
+]

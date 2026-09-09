@@ -188,22 +188,52 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
     if open_slots <= 0:
         return
     for candidate in queue_mod.list_candidates()[:open_slots]:
+        pending = state.get("pending_upload") or {}
+        resuming = pending.get("filename") == candidate["filename"] and pending.get("asset_id")
         try:
-            upload = api.upload_thumbnail(str(candidate["path"]))
-            status = api.wait_for_upload()
-            asset_id = str(
-                upload.get("thumbnailAssetId")
-                or upload.get("assetId")
-                or status.get("thumbnailAssetId")
-                or status.get("assetId")
-                or ""
-            )
-            if not asset_id:
-                log.error("Upload of %s gave no asset id; leaving it queued",
-                          candidate["filename"])
-                continue
+            if resuming:
+                # A previous run uploaded this image and moderation had not
+                # finished. Never upload it a second time.
+                asset_id = str(pending["asset_id"])
+                log.info("Resuming pending upload %s (asset %s)",
+                         candidate["filename"], asset_id)
+                entry = next((t for t in api.list_thumbnails()
+                              if str(t.get("assetId", "")) == asset_id), None)
+                moderation = str((entry or {}).get("moderationStatus", "")).lower()
+                if moderation in {"rejected", "declined"}:
+                    log.error("%s was rejected by moderation; dropping candidate",
+                              candidate["filename"])
+                    state["pending_upload"] = None
+                    continue
+                if moderation != "approved":
+                    log.info("%s still awaiting moderation; will retry next run",
+                             candidate["filename"])
+                    continue
+            else:
+                # Snapshot before uploading so the new thumbnail can be identified
+                # by difference — the upload response carries no reliable id.
+                known = {str(t.get("assetId", t.get("thumbnailAssetId", "")))
+                         for t in api.list_thumbnails()}
+                api.upload_thumbnail(str(candidate["path"]))
+                log.info("Uploaded %s; waiting for moderation", candidate["filename"])
+                try:
+                    new_thumbnail = api.wait_for_new_thumbnail(known)
+                except RobloxApiError as exc:
+                    # Remember any asset that appeared so the retry resumes
+                    # rather than uploading a duplicate.
+                    appeared = [str(t.get("assetId", "")) for t in api.list_thumbnails()
+                                if str(t.get("assetId", "")) not in known]
+                    if appeared:
+                        state["pending_upload"] = {"filename": candidate["filename"],
+                                                   "asset_id": appeared[0],
+                                                   "uploaded_at": timestamp}
+                    raise exc
+                asset_id = str(new_thumbnail.get("assetId",
+                                                 new_thumbnail.get("thumbnailAssetId", "")))
+
             current = [r.roblox_asset_id for r in records if r.status == "active"]
             api.update_personalization(current + [asset_id])
+            state["pending_upload"] = None
         except RobloxApiError as exc:
             log.error("Activation of %s failed; leaving it queued: %s",
                       candidate["filename"], exc)

@@ -116,16 +116,38 @@ class RobloxApi:
             f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/thumbnails/uploads/status",
         )
 
-    def wait_for_upload(self, poll_seconds: int = 15, timeout_seconds: int = 600) -> dict:
-        """Poll upload processing until it settles or times out."""
+    def wait_for_new_thumbnail(self, known_asset_ids: set[str], poll_seconds: int = 15,
+                               timeout_seconds: int = 600) -> dict:
+        """Wait for an uploaded image to appear as a moderated thumbnail.
+
+        The uploads/status endpoint returns an undocumented numeric enum
+        (`uploadStatus`) whose meaning is not published, so success is
+        confirmed against ground truth instead: a thumbnail Roblox did not
+        list before the upload, moderated to Approved.
+
+        Returns the new thumbnail entry. Raises if moderation rejects it or
+        it never appears.
+        """
         deadline = time.monotonic() + timeout_seconds
+        pending_asset_id: str | None = None
         while time.monotonic() < deadline:
-            status = self.upload_status()
-            state = str(status.get("status", status.get("state", ""))).lower()
-            if state and state not in {"pending", "processing", "inprogress", "in_progress"}:
-                return status
+            for t in self.list_thumbnails():
+                asset_id = str(t.get("assetId", t.get("thumbnailAssetId", "")))
+                if not asset_id or asset_id in known_asset_ids:
+                    continue
+                moderation = str(t.get("moderationStatus", "")).lower()
+                if moderation == "approved":
+                    return t
+                if moderation in {"rejected", "declined"}:
+                    raise RobloxApiError(
+                        f"Uploaded thumbnail {asset_id} was rejected by moderation")
+                pending_asset_id = asset_id
             time.sleep(poll_seconds)
-        raise RobloxApiError("Timed out waiting for thumbnail upload processing")
+
+        if pending_asset_id:
+            raise RobloxApiError(
+                f"Uploaded thumbnail {pending_asset_id} is still awaiting moderation")
+        raise RobloxApiError("Uploaded thumbnail never appeared in the thumbnail list")
 
     # -- analytics -----------------------------------------------------------
 

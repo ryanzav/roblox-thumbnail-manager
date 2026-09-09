@@ -19,7 +19,7 @@ DEFAULTS = {
     "allow_thumbnail_uploads": False,
     "allow_ai_generation": False,
     "image_provider": "gemini",
-    "image_model": "gemini-3.8-flash",
+    "image_model": "gemini-3-pro-image",
     "allow_ai_descriptions": True,
     "description_model": "gemini-3.6-flash",
 }

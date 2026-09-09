@@ -5,7 +5,7 @@
   "queue_order": "fifo",
   "source_thumbnail_selection": "weighted_random",
   "allow_thumbnail_deactivation": true,
-  "allow_thumbnail_uploads": false,
+  "allow_thumbnail_uploads": true,
   "allow_ai_generation": true,
   "image_provider": "gemini",
   "image_model": "gemini-3-pro-image",

@@ -54,6 +54,7 @@ async function main() {
     if (!latestByKey[key] || m.timestamp >= latestByKey[key].timestamp) latestByKey[key] = m;
   }
 
+  renderGeneratedAt(latest);
   renderOverview(latest, thumbs, latestByKey);
   renderGateBanner(latest, latestByKey, thumbs);
   renderActiveCards(thumbs, latestByKey);
@@ -64,6 +65,35 @@ async function main() {
   renderHistory(thumbs, metrics, latestByKey);
 }
 
+function relativeAge(then, now = Date.now()) {
+  const mins = Math.floor((now - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function renderGeneratedAt(latest) {
+  const el = document.getElementById("generated-at");
+  const foot = document.getElementById("generated-footer");
+  if (!latest.last_update) {
+    el.textContent = "No data generated yet.";
+    if (foot) foot.textContent = "";
+    return;
+  }
+  const when = new Date(latest.last_update);
+  const age = Date.now() - when.getTime();
+  // Runs are scheduled every 6 hours; well past that means something stalled.
+  const stale = age > 8 * 3600 * 1000;
+  const text = `Generated ${when.toLocaleString()} · ${relativeAge(when.getTime())}`;
+  el.innerHTML = stale
+    ? `${text} <span class="stale">— no recent run</span>`
+    : text;
+  if (foot) foot.textContent = `Page data generated ${when.toISOString()} (UTC).`;
+}
+
 function activeThumbs(thumbs) {
   return thumbs.filter(t => t.status === "active");
 }
@@ -71,7 +101,6 @@ function activeThumbs(thumbs) {
 function renderOverview(latest, thumbs, latestByKey) {
   const el = document.getElementById("overview");
   const stats = [
-    ["Last update", latest.last_update ? fmtDate(latest.last_update) : "No data yet"],
     ["Active thumbnails", `${latest.active_count ?? activeThumbs(thumbs).length} / ${latest.target_active ?? 5}`],
     ["Queue", `${latest.queue_size ?? 0} candidates`],
     ["Best current qPTR", latest.best_qptr != null ? fmtPct(latest.best_qptr) : "—"],

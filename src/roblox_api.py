@@ -10,6 +10,8 @@ import time
 
 import requests
 
+from .imaging import mime_for_path
+
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://apis.roblox.com"
@@ -99,11 +101,12 @@ class RobloxApi:
         return data.get("homepageThumbnails", data.get("thumbnails", data.get("data", [])))
 
     def upload_thumbnail(self, image_path: str) -> dict:
+        mime = mime_for_path(image_path)
         with open(image_path, "rb") as fh:
             return self._request(
                 "POST",
                 f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/thumbnails/uploads",
-                files={"file": (image_path.rsplit("/", 1)[-1], fh, "image/png")},
+                files={"file": (image_path.rsplit("/", 1)[-1], fh, mime)},
                 timeout=180,
             )
 

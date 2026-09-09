@@ -8,6 +8,7 @@ from pathlib import Path
 from . import queue as queue_mod
 from .config import REPO_ROOT, Config
 from .history import METRICS_CSV, THUMBNAILS_CSV
+from .imaging import IMAGE_EXTENSIONS
 from .models import ThumbnailMetrics
 
 DOCS_DATA_DIR = REPO_ROOT / "docs" / "data"
@@ -52,8 +53,8 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
     queue_image_dir.mkdir(parents=True, exist_ok=True)
 
     current = {c["filename"] for c in candidates}
-    for stale in queue_image_dir.glob("*.png"):
-        if stale.name not in current:
+    for stale in queue_image_dir.iterdir():
+        if stale.suffix.lower() in IMAGE_EXTENSIONS and stale.name not in current:
             stale.unlink()
 
     entries = []

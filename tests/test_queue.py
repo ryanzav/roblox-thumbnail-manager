@@ -53,6 +53,21 @@ def test_archive_moves_file_out_of_queue(tmp_path):
     assert not (qdir / "cand.json").exists()
 
 
+def test_lists_jpeg_candidates_alongside_png(tmp_path):
+    make_candidate(tmp_path, "a.png", "2026-09-01T00:00:00Z")
+    (tmp_path / "b.jpg").write_bytes(b"\xff\xd8\xff jpeg data")
+    (tmp_path / "b.json").write_text(json.dumps({"generated_at": "2026-09-02T00:00:00Z"}))
+    names = [c["filename"] for c in queue_mod.list_candidates(tmp_path)]
+    assert names == ["a.png", "b.jpg"]
+
+
+def test_ignores_non_image_files(tmp_path):
+    make_candidate(tmp_path, "a.png", "2026-09-01T00:00:00Z")
+    (tmp_path / "notes.txt").write_text("scratch")
+    (tmp_path / ".gitkeep").write_text("")
+    assert [c["filename"] for c in queue_mod.list_candidates(tmp_path)] == ["a.png"]
+
+
 def test_write_candidate_creates_pair(tmp_path):
     queue_mod.write_candidate(b"img", "candidate-001.png", {"prompt": "p"}, tmp_path)
     assert (tmp_path / "candidate-001.png").read_bytes() == b"img"

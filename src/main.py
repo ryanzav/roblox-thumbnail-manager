@@ -212,7 +212,7 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
         seq = state.get("next_thumbnail_sequence", 1)
         state["next_thumbnail_sequence"] = seq + 1
         key = f"thumb-{seq:03d}"
-        final_name = f"{key}.png"
+        final_name = key + candidate["path"].suffix
         queue_mod.archive_candidate(candidate, final_name)
         records.append(ThumbnailRecord(
             thumbnail_key=key,
@@ -294,15 +294,16 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
             return
         seq = state.get("next_candidate_sequence", 1)
         state["next_candidate_sequence"] = seq + 1
-        filename = f"candidate-{seq:03d}.png"
+        stem = f"candidate-{seq:03d}"
         prompt = build_prompt(source)
         try:
-            generate_candidate(cfg, prompt, filename,
-                               description=source.description,
-                               source_thumbnail_id=source.thumbnail_key)
+            filename = generate_candidate(cfg, prompt, stem,
+                                          description=source.description,
+                                          source_thumbnail_id=source.thumbnail_key)
+            log.info("Generated %s from %s", filename, source.thumbnail_key)
             generated += 1
         except GenerationError as exc:
-            log.error("Generation failed for %s: %s", filename, exc)
+            log.error("Generation failed for %s: %s", stem, exc)
             break
     log.info("Generated %d new candidates", generated)
 

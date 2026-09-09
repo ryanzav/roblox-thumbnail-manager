@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import requests
 
 from .config import Config
+from .imaging import detect_format
 from . import queue as queue_mod
 
 log = logging.getLogger(__name__)
@@ -31,13 +32,19 @@ class GenerationError(Exception):
     pass
 
 
-def generate_candidate(cfg: Config, prompt: str, filename: str,
+def generate_candidate(cfg: Config, prompt: str, stem: str,
                        description: str, source_thumbnail_id: str) -> str:
-    """Generate one 16:9 candidate, save it into the queue, return filename."""
+    """Generate one 16:9 candidate, save it into the queue, return filename.
+
+    The extension comes from the returned image data, not from the caller,
+    because providers differ in the format they produce.
+    """
     if cfg.image_provider == "gemini":
         image_bytes, model_used = _generate_gemini(cfg, prompt)
     else:
         raise GenerationError(f"Unknown image provider: {cfg.image_provider}")
+
+    filename = stem + detect_format(image_bytes)[0]
 
     metadata = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

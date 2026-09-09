@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 
 from .config import REPO_ROOT
+from .imaging import IMAGE_EXTENSIONS
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +24,9 @@ def list_candidates(queue_dir: Path = QUEUE_DIR) -> list[dict]:
     if not queue_dir.exists():
         return []
     candidates = []
-    for png in queue_dir.glob("*.png"):
+    images = sorted(p for p in queue_dir.iterdir()
+                    if p.suffix.lower() in IMAGE_EXTENSIONS)
+    for png in images:
         if png.stat().st_size == 0:
             log.warning("Skipping empty queue file %s", png.name)
             continue

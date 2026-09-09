@@ -1,4 +1,6 @@
 .env
+roblox-api-key.txt
+*.key.txt
 .venv/
 __pycache__/
 *.pyc

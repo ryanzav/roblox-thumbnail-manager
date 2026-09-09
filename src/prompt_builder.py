@@ -4,7 +4,7 @@ import random
 
 from .models import ThumbnailRecord
 
-PROMPT_TEMPLATE = """Create a high quality Roblox game thumbnail.
+PROMPT_TEMPLATE = """Create an incredibly cute, high quality Roblox game thumbnail.
 {description}
 Make it attractive at Roblox thumbnail size.
 16:9 composition. No text unless specifically requested."""

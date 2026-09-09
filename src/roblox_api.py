@@ -133,38 +133,38 @@ class RobloxApi:
                 f"/thumbnails/uploads/status")
         return self._request("GET", path, params=params)
 
-    def wait_for_new_thumbnail(self, known_asset_ids: set[str], poll_seconds: int = 15,
-                               timeout_seconds: int = 600) -> dict:
-        """Wait for an uploaded image to appear as a moderated thumbnail.
+    # uploadStatus values observed from the live API: 1 while the upload is
+    # still processing, 2 once it has finished (success or moderation verdict).
+    UPLOAD_PENDING = 1
 
-        The uploads/status endpoint returns an undocumented numeric enum
-        (`uploadStatus`) whose meaning is not published, so success is
-        confirmed against ground truth instead: a thumbnail Roblox did not
-        list before the upload, moderated to Approved.
+    def wait_for_upload(self, operation_id: str, poll_seconds: int = 10,
+                        timeout_seconds: int = 600) -> dict:
+        """Wait for one upload operation to finish; return its thumbnail entry.
 
-        Returns the new thumbnail entry. Raises if moderation rejects it or
-        it never appears.
+        The finished result carries `assetId`, `homepageThumbnailId` and
+        `moderationStatus`. A newly uploaded thumbnail can take longer to
+        surface in the thumbnails list than it takes this operation to
+        complete, so the operation is the authoritative signal.
         """
         deadline = time.monotonic() + timeout_seconds
-        pending_asset_id: str | None = None
         while time.monotonic() < deadline:
-            for t in self.list_thumbnails():
-                asset_id = str(t.get("assetId", t.get("thumbnailAssetId", "")))
-                if not asset_id or asset_id in known_asset_ids:
-                    continue
-                moderation = str(t.get("moderationStatus", "")).lower()
-                if moderation == "approved":
-                    return t
+            status = self.upload_status(operation_id)
+            if status.get("uploadStatus") != self.UPLOAD_PENDING:
+                entry = (status.get("uploadThumbnailStatusDict") or {}).get(operation_id)
+                if entry is None:
+                    results = list((status.get("uploadThumbnailStatusDict") or {}).values())
+                    entry = results[0] if results else None
+                if entry is None:
+                    raise RobloxApiError(
+                        "Upload finished but Roblox reported no thumbnail for it")
+                moderation = str(entry.get("moderationStatus", "")).lower()
                 if moderation in {"rejected", "declined"}:
                     raise RobloxApiError(
-                        f"Uploaded thumbnail {asset_id} was rejected by moderation")
-                pending_asset_id = asset_id
+                        f"Uploaded thumbnail {entry.get('assetId')} was rejected "
+                        f"by moderation")
+                return entry
             time.sleep(poll_seconds)
-
-        if pending_asset_id:
-            raise RobloxApiError(
-                f"Uploaded thumbnail {pending_asset_id} is still awaiting moderation")
-        raise RobloxApiError("Uploaded thumbnail never appeared in the thumbnail list")
+        raise RobloxApiError("Timed out waiting for thumbnail upload processing")
 
     # -- analytics -----------------------------------------------------------
 

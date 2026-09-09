@@ -222,8 +222,6 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
             else:
                 # Snapshot before uploading so the new thumbnail can be identified
                 # by difference — the upload response carries no reliable id.
-                known = {str(t.get("assetId", t.get("thumbnailAssetId", "")))
-                         for t in api.list_thumbnails()}
                 operation_id = api.upload_thumbnail(str(candidate["path"]))
                 # Record the in-flight upload immediately: if this run ends
                 # before moderation finishes, the next one must resume rather
@@ -233,16 +231,10 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
                                            "operation_id": operation_id,
                                            "uploaded_at": timestamp}
                 log.info("Uploaded %s; waiting for moderation", candidate["filename"])
-                try:
-                    new_thumbnail = api.wait_for_new_thumbnail(known)
-                except RobloxApiError as exc:
-                    appeared = [str(t.get("assetId", "")) for t in api.list_thumbnails()
-                                if str(t.get("assetId", "")) not in known]
-                    if appeared:
-                        state["pending_upload"]["asset_id"] = appeared[0]
-                    raise exc
-                asset_id = str(new_thumbnail.get("assetId",
-                                                 new_thumbnail.get("thumbnailAssetId", "")))
+                new_thumbnail = api.wait_for_upload(operation_id)
+                asset_id = str(new_thumbnail.get("assetId", ""))
+                state["pending_upload"]["asset_id"] = asset_id
+                log.info("%s approved as asset %s", candidate["filename"], asset_id)
 
             current = [r.roblox_asset_id for r in records if r.status == "active"]
             api.update_personalization(current + [asset_id])

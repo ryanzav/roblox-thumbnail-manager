@@ -94,11 +94,17 @@ def run() -> int:
         _fill_slots(api, cfg, records, state, timestamp)
 
     # 5. Replenish the AI queue. Failures here never fail the run.
+    generated_any = False
     if cfg.allow_ai_generation:
         try:
-            _replenish_queue(cfg, records, metrics_rows, state)
+            generated_any = _replenish_queue(cfg, records, metrics_rows, state) > 0
         except Exception as exc:
             log.error("Queue replenishment failed (continuing): %s", exc)
+
+    # 5b. Activate what was just generated, so a slot that opened this run is
+    # refilled in this run rather than six hours later.
+    if generated_any and cfg.allow_thumbnail_uploads:
+        _fill_slots(api, cfg, records, state, timestamp)
 
     # 6. Mirror Roblox-hosted thumbnail images locally so the dashboard can
     # show them. Best-effort: image problems never fail the run.
@@ -315,12 +321,13 @@ def _describe_missing(cfg, records: list[ThumbnailRecord]) -> None:
 
 
 def _replenish_queue(cfg, records: list[ThumbnailRecord],
-                     metrics_rows: list[ThumbnailMetrics], state: dict) -> None:
+                     metrics_rows: list[ThumbnailMetrics], state: dict) -> int:
+    """Generate candidates for open slots. Returns how many were created."""
     active_records = [r for r in records if r.status == "active"]
     deficit = queue_mod.candidates_needed(
         len(active_records), queue_mod.queue_size(), cfg.target_active_thumbnails)
     if deficit <= 0:
-        return
+        return 0
     qptr_by_key = {m.thumbnail_key: m.qualified_ptr for m in metrics_rows
                    if m.qualified_ptr is not None}
 
@@ -332,7 +339,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
     if not winners:
         log.warning("No active thumbnail has %d+ impressions with trustworthy "
                     "metrics; skipping generation this run", cfg.minimum_impressions)
-        return
+        return 0
     active_records = [r for r in active_records if r.thumbnail_key in winners]
     log.info("Generating from top performers: %s", ", ".join(sorted(winners)))
     generated = 0
@@ -341,7 +348,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
                                cfg.source_thumbnail_selection)
         if source is None:
             log.warning("No active thumbnail has a description; cannot generate")
-            return
+            break
         seq = state.get("next_candidate_sequence", 1)
         state["next_candidate_sequence"] = seq + 1
         stem = f"candidate-{seq:03d}"
@@ -356,6 +363,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
             log.error("Generation failed for %s: %s", stem, exc)
             break
     log.info("Generated %d new candidates", generated)
+    return generated
 
 
 if __name__ == "__main__":

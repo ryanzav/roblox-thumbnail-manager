@@ -447,10 +447,21 @@ candidates fresh, since each one is bred from whichever thumbnails are winning
 at the time it is generated rather than sitting in a buffer while the leaders
 change.
 
-Note the ordering consequence: queued candidates are activated earlier in the
-same run, before replenishment. When an evaluation deactivates several
-thumbnails at once, the queue may not cover every slot immediately, so the
-newly opened slots are filled over the following runs rather than all at once.
+A slot that opens is refilled within the same run. Queued candidates are
+activated before replenishment, and anything generated afterwards is activated
+in a second fill pass, so a deactivation and its replacement complete in one
+execution rather than leaving the slot empty until the next scheduled run:
+
+```text
+deactivate weak thumbnail      -> 4 active
+activate any queued candidate  -> queue was empty, nothing to activate
+generate for the open slot     -> 1 candidate
+activate what was generated    -> 5 active
+```
+
+The consequence is that a generated image can go live seconds after it is
+created, with no opportunity to review it first. Set `allow_thumbnail_uploads`
+to `false` to keep candidates in the queue for manual inspection.
 
 Generation should not block metric collection. If AI image generation fails, the metrics/history/dashboard portion of the scheduled run should still succeed whenever possible.
 

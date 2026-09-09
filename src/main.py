@@ -14,7 +14,7 @@ from .image_generator import GenerationError, generate_candidate
 from .models import ThumbnailMetrics, ThumbnailRecord
 from .prompt_builder import build_prompt, choose_source
 from .roblox_api import RobloxApi, RobloxApiError
-from .selector import choose_changes
+from .selector import choose_changes, eligible_source_keys
 
 log = logging.getLogger("thumbnail-manager")
 
@@ -272,6 +272,17 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
     active_records = [r for r in records if r.status == "active"]
     qptr_by_key = {m.thumbnail_key: m.qualified_ptr for m in metrics_rows
                    if m.qualified_ptr is not None}
+
+    # Breed only from the top performers: the best active qPTR and everything
+    # within the same gap the deactivation rule uses.
+    active_metrics = [m for m in metrics_rows if m.status == "active"]
+    winners = eligible_source_keys(active_metrics, cfg.qptr_gap_decimal)
+    if winners:
+        active_records = [r for r in active_records if r.thumbnail_key in winners]
+        log.info("Generating from top performers: %s", ", ".join(sorted(winners)))
+    else:
+        log.warning("No active thumbnail has trustworthy metrics; "
+                    "seeding from all active thumbnails")
     generated = 0
     for _ in range(deficit):
         source = choose_source(active_records, qptr_by_key,

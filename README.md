@@ -289,7 +289,27 @@ The exact prompt-generation strategy should live in code rather than being hardc
 
 ## Choosing the Source Thumbnail
 
-When generating a candidate, the system selects one of the currently active thumbnails that has a usable description.
+When generating a candidate, the system selects one of the **top-performing**
+active thumbnails that has a usable description.
+
+Only the best active thumbnail and those within **0.5 percentage points** of it
+are eligible as sources — the same cutoff the deactivation rule uses. New
+creatives are therefore only ever bred from thumbnails good enough to keep:
+
+```text
+Thumbnail A    8.4%    SOURCE  (best)
+Thumbnail E    8.3%    SOURCE
+Thumbnail B    8.1%    SOURCE
+Thumbnail C    7.8%    not eligible
+Thumbnail D    7.2%    not eligible
+```
+
+A thumbnail without trustworthy metrics is never a source, because it is not
+known to be a winner. Unlike deactivation, this rule does not wait for the
+1,000-impression gate: a promising new thumbnail may seed candidates before it
+has accumulated enough traffic to be judged. If no active thumbnail has metrics
+at all, the system falls back to seeding from any active thumbnail with a
+description.
 
 The generated candidate records the source thumbnail ID:
 

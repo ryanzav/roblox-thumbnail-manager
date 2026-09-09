@@ -3,6 +3,24 @@
 from .models import SelectionResult, ThumbnailMetrics
 
 
+def eligible_source_keys(active_thumbnails: list[ThumbnailMetrics],
+                         qptr_gap: float = 0.005) -> set[str]:
+    """Keys of the top-performing active thumbnails: the best qPTR and every
+    thumbnail within qptr_gap of it.
+
+    This is the same cutoff the deactivation rule uses, so new creatives are
+    only bred from thumbnails good enough to keep. Thumbnails without
+    trustworthy metrics are excluded — an unmeasured thumbnail is not known
+    to be a winner.
+    """
+    measured = [t for t in active_thumbnails if t.trustworthy]
+    if not measured:
+        return set()
+    best_qptr = max(t.qualified_ptr for t in measured)
+    cutoff = best_qptr - qptr_gap
+    return {t.thumbnail_key for t in measured if t.qualified_ptr >= cutoff}
+
+
 def choose_changes(active_thumbnails: list[ThumbnailMetrics],
                    minimum_impressions: int = 1000,
                    qptr_gap: float = 0.005) -> SelectionResult:

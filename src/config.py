@@ -22,7 +22,7 @@ DEFAULTS = {
     "image_provider": "gemini",
     "image_model": "imagen-4.0-generate-001",
     "allow_ai_descriptions": True,
-    "description_model": "gemini-2.5-flash",
+    "description_model": "gemini-3.6-flash",
 }
 
 

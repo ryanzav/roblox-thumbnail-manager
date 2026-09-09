@@ -4,15 +4,9 @@ import random
 
 from .models import ThumbnailRecord
 
-PROMPT_TEMPLATE = """Create a new Roblox game thumbnail inspired by this existing
-thumbnail concept:
-
-"{description}"
-
-Create a visually distinct variation rather than a duplicate.
-Preserve the game's visual identity while changing composition,
-camera angle, subject emphasis, background arrangement, or
-supporting elements. Make it attractive at Roblox thumbnail size.
+PROMPT_TEMPLATE = """Create a high quality Roblox game thumbnail.
+{description}
+Make it attractive at Roblox thumbnail size.
 16:9 composition. No text unless specifically requested."""
 
 

@@ -270,16 +270,10 @@ flowers, a rainbow in the background, and a bright blue sky.
 The prompt builder may use that description as a creative seed:
 
 ```text
-Create a new Roblox game thumbnail inspired by this existing
-thumbnail concept:
-
-"A colorful butterfly flying above green Roblox-style hills with
-flowers, a rainbow in the background, and a bright blue sky."
-
-Create a visually distinct variation rather than a duplicate.
-Preserve the game's visual identity while changing composition,
-camera angle, subject emphasis, background arrangement, or
-supporting elements. Make it attractive at Roblox thumbnail size.
+Create a high quality Roblox game thumbnail.
+A colorful butterfly flying above green Roblox-style hills with
+flowers, a rainbow in the background, and a bright blue sky.
+Make it attractive at Roblox thumbnail size.
 16:9 composition. No text unless specifically requested.
 ```
 

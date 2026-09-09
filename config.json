@@ -9,5 +9,7 @@
   "allow_thumbnail_uploads": false,
   "allow_ai_generation": false,
   "image_provider": "gemini",
-  "image_model": "imagen-4.0-generate-001"
+  "image_model": "imagen-4.0-generate-001",
+  "allow_ai_descriptions": true,
+  "description_model": "gemini-3.6-flash"
 }

@@ -111,8 +111,9 @@ def run() -> int:
 def _active_asset_ids(remote_thumbnails: list[dict]) -> list[str]:
     ids = []
     for t in remote_thumbnails:
-        asset_id = t.get("thumbnailAssetId", t.get("assetId", t.get("targetId")))
-        state = str(t.get("state", t.get("status", "active"))).lower()
+        asset_id = t.get("assetId", t.get("thumbnailAssetId", t.get("targetId")))
+        state = str(t.get("homepageThumbnailStatus",
+                          t.get("state", t.get("status", "active")))).lower()
         if asset_id is not None and state in {"active", "enabled", ""}:
             ids.append(str(asset_id))
     return ids

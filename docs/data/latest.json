@@ -1,9 +1,9 @@
 {
-  "last_update": "2026-09-09T01:51:38Z",
-  "active_count": 0,
+  "last_update": "2026-09-09T01:55:59Z",
+  "active_count": 10,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": null,
-  "evaluation_status": "Roblox state unavailable; no changes made",
+  "best_qptr": 0.03152114897966385,
+  "evaluation_status": "missing metrics for at least one active thumbnail; gate closed",
   "gate_impressions": 1000
 }

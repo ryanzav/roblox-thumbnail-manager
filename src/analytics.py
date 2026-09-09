@@ -1,6 +1,7 @@
 """Query Roblox Analytics and normalize results into ThumbnailMetrics."""
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from .models import ThumbnailMetrics
@@ -59,6 +60,7 @@ def fetch_thumbnail_metrics(api: RobloxApi, asset_ids: list[str],
         }
         try:
             data = api.query_metrics(body)
+            data = _resolve_operation(api, data)
         except RobloxApiError as exc:
             log.error("Analytics query failed for %s: %s", metric, exc)
             continue
@@ -96,9 +98,25 @@ def _merge_metric(results: dict[str, ThumbnailMetrics], metric: str, data: dict)
         setattr(results[asset_id], field, value)
 
 
+def _resolve_operation(api: RobloxApi, data: dict) -> dict:
+    """The metrics endpoint returns a long-running operation envelope:
+    {"path": ..., "done": bool, "response": {...}}. Poll until done."""
+    for _ in range(10):
+        if data.get("done") or "path" not in data:
+            break
+        time.sleep(3)
+        data = api.get_operation(data["path"])
+    if "path" in data and not data.get("done"):
+        raise RobloxApiError("Analytics operation did not complete in time")
+    return data
+
+
 def _iter_groups(data: dict):
-    # Tolerate a few plausible response shapes since the API is experimental.
-    for key in ("breakdownDataPoints", "groups", "values", "data"):
+    # Unwrap the operation envelope, then tolerate a few plausible shapes
+    # since the API is experimental.
+    if isinstance(data.get("response"), dict):
+        data = data["response"]
+    for key in ("values", "breakdownDataPoints", "groups", "data"):
         groups = data.get(key)
         if isinstance(groups, list):
             return groups
@@ -106,7 +124,8 @@ def _iter_groups(data: dict):
 
 
 def _group_asset_id(group: dict) -> str | None:
-    breakdown = group.get("breakdownValue", group.get("breakdown", group.get("dimensionValues")))
+    breakdown = group.get("breakdowns", group.get(
+        "breakdownValue", group.get("breakdown", group.get("dimensionValues"))))
     if isinstance(breakdown, list):
         for item in breakdown:
             if isinstance(item, dict) and item.get("value") is not None:

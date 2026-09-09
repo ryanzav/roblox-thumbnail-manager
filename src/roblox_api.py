@@ -96,7 +96,7 @@ class RobloxApi:
             "GET",
             f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/thumbnails",
         )
-        return data.get("thumbnails", data.get("data", []))
+        return data.get("homepageThumbnails", data.get("thumbnails", data.get("data", [])))
 
     def upload_thumbnail(self, image_path: str) -> dict:
         with open(image_path, "rb") as fh:
@@ -132,3 +132,8 @@ class RobloxApi:
             f"/analytics-query-api/v1/universes/{self.universe_id}/metrics",
             json_body=body,
         )
+
+    def get_operation(self, operation_path: str) -> dict:
+        """Fetch a long-running analytics operation by the path the metrics
+        endpoint returned (e.g. 'v1/universes/.../operations/metrics/...')."""
+        return self._request("GET", f"/analytics-query-api/{operation_path.lstrip('/')}")

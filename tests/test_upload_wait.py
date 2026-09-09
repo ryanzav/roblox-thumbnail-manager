@@ -62,7 +62,7 @@ class RecordingApi(RobloxApi):
         self.sent = None
 
     def _request(self, method, path, *, json_body=None, files=None, params=None, timeout=60):
-        self.sent = {"path": path, "files": files, "params": params}
+        self.sent = {"path": path, "files": files, "params": params, "json": json_body}
         return self._response
 
 
@@ -87,3 +87,17 @@ def test_upload_status_passes_operation_ids():
     api = RecordingApi({"uploadStatus": 1})
     api.upload_status("op-123")
     assert api.sent["params"] == {"operationIds": "op-123"}
+
+
+def test_set_active_thumbnails_uses_homepage_ids_and_create():
+    api = RecordingApi({"ok": True})
+    api.set_active_thumbnails(["uuid-a", "uuid-b"])
+    assert api.sent["path"].endswith("/personalization/create")
+    assert api.sent["json"] == {"homepageThumbnailIds": ["uuid-a", "uuid-b"]}
+
+
+def test_refuses_to_publish_an_empty_active_set():
+    api = RecordingApi({})
+    with pytest.raises(RobloxApiError, match="empty active thumbnail set"):
+        api.set_active_thumbnails([])
+    assert api.sent is None

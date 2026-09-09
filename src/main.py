@@ -169,7 +169,12 @@ def _apply_deactivation(api: RobloxApi, cfg, records: list[ThumbnailRecord],
     remove_ids = {m.roblox_asset_id for m in to_deactivate}
     keep_ids = [a for a in active_asset_ids if a not in remove_ids]
     try:
-        api.update_personalization(keep_ids)
+        hp_ids = api.homepage_thumbnail_ids()
+        keep_hp = [hp_ids[a] for a in keep_ids if a in hp_ids]
+        if len(keep_hp) != len(keep_ids):
+            log.error("Could not resolve every thumbnail id; active set unchanged")
+            return
+        api.set_active_thumbnails(keep_hp)
     except RobloxApiError as exc:
         log.error("Deactivation update failed; active set unchanged: %s", exc)
         return
@@ -194,21 +199,22 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
         resuming = pending.get("filename") == candidate["filename"]
         try:
             if resuming and not pending.get("asset_id"):
-                log.info("%s was already uploaded and is still processing; "
-                         "waiting rather than uploading again", candidate["filename"])
-                known = {str(t.get("assetId", "")) for t in api.list_thumbnails()}
-                status = api.upload_status(pending.get("operation_id"))
-                log.info("Upload status for %s: %s",
-                         candidate["filename"], status.get("uploadStatus"))
-                continue
-            if resuming:
+                # Uploaded by an earlier run that ended before the operation
+                # finished; pick that operation back up rather than re-upload.
+                log.info("%s was already uploaded; resuming its operation",
+                         candidate["filename"])
+                new_thumbnail = api.wait_for_upload(pending["operation_id"])
+                asset_id = str(new_thumbnail.get("assetId", ""))
+                state["pending_upload"]["asset_id"] = asset_id
+            elif resuming:
                 # A previous run uploaded this image and moderation had not
                 # finished. Never upload it a second time.
                 asset_id = str(pending["asset_id"])
                 log.info("Resuming pending upload %s (asset %s)",
                          candidate["filename"], asset_id)
-                entry = next((t for t in api.list_thumbnails()
-                              if str(t.get("assetId", "")) == asset_id), None)
+                new_thumbnail = next((t for t in api.list_thumbnails()
+                                      if str(t.get("assetId", "")) == asset_id), None)
+                entry = new_thumbnail
                 moderation = str((entry or {}).get("moderationStatus", "")).lower()
                 if moderation in {"rejected", "declined"}:
                     log.error("%s was rejected by moderation; dropping candidate",
@@ -236,8 +242,16 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
                 state["pending_upload"]["asset_id"] = asset_id
                 log.info("%s approved as asset %s", candidate["filename"], asset_id)
 
+            # Activation is expressed in homepageThumbnailIds, so resolve the
+            # whole intended active set — current actives plus the new upload.
+            hp_ids = api.homepage_thumbnail_ids()
             current = [r.roblox_asset_id for r in records if r.status == "active"]
-            api.update_personalization(current + [asset_id])
+            desired = [hp_ids[a] for a in current if a in hp_ids]
+            new_hp = new_thumbnail.get("homepageThumbnailId") or hp_ids.get(asset_id)
+            if not new_hp:
+                raise RobloxApiError(
+                    f"No homepageThumbnailId for uploaded asset {asset_id}")
+            api.set_active_thumbnails(desired + [new_hp])
             state["pending_upload"] = None
         except RobloxApiError as exc:
             log.error("Activation of %s failed; leaving it queued: %s",

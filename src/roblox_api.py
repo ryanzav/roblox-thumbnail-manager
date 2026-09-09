@@ -80,19 +80,27 @@ class RobloxApi:
             f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/personalization",
         )
 
-    def create_personalization(self, thumbnail_asset_ids: list[str]) -> dict:
+    def set_active_thumbnails(self, homepage_thumbnail_ids: list[str]) -> dict:
+        """Make exactly these thumbnails the active personalization set.
+
+        Takes `homepageThumbnailId` values (UUIDs), not asset ids — the API
+        rejects asset ids with "no homepage thumbnail ids provided". This
+        posts to /personalization/create, which replaces the active config
+        and returns its new id; /personalization/update answers 500.
+        """
+        if not homepage_thumbnail_ids:
+            raise RobloxApiError("Refusing to publish an empty active thumbnail set")
         return self._request(
             "POST",
             f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/personalization/create",
-            json_body={"thumbnailAssetIds": thumbnail_asset_ids},
+            json_body={"homepageThumbnailIds": homepage_thumbnail_ids},
         )
 
-    def update_personalization(self, thumbnail_asset_ids: list[str]) -> dict:
-        return self._request(
-            "POST",
-            f"/thumbnail-personalization-api/v1/universes/{self.universe_id}/personalization/update",
-            json_body={"thumbnailAssetIds": thumbnail_asset_ids},
-        )
+    def homepage_thumbnail_ids(self) -> dict[str, str]:
+        """Map asset id -> homepageThumbnailId for every listed thumbnail."""
+        return {str(t.get("assetId", "")): str(t.get("homepageThumbnailId", ""))
+                for t in self.list_thumbnails()
+                if t.get("assetId") and t.get("homepageThumbnailId")}
 
     def list_thumbnails(self) -> list[dict]:
         data = self._request(

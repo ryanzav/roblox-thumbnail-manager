@@ -276,13 +276,14 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
     # Breed only from the top performers: the best active qPTR and everything
     # within the same gap the deactivation rule uses.
     active_metrics = [m for m in metrics_rows if m.status == "active"]
-    winners = eligible_source_keys(active_metrics, cfg.qptr_gap_decimal)
-    if winners:
-        active_records = [r for r in active_records if r.thumbnail_key in winners]
-        log.info("Generating from top performers: %s", ", ".join(sorted(winners)))
-    else:
-        log.warning("No active thumbnail has trustworthy metrics; "
-                    "seeding from all active thumbnails")
+    winners = eligible_source_keys(active_metrics, cfg.qptr_gap_decimal,
+                                   cfg.minimum_impressions)
+    if not winners:
+        log.warning("No active thumbnail has %d+ impressions with trustworthy "
+                    "metrics; skipping generation this run", cfg.minimum_impressions)
+        return
+    active_records = [r for r in active_records if r.thumbnail_key in winners]
+    log.info("Generating from top performers: %s", ", ".join(sorted(winners)))
     generated = 0
     for _ in range(deficit):
         source = choose_source(active_records, qptr_by_key,

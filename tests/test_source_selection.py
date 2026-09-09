@@ -37,12 +37,33 @@ def test_no_metrics_returns_empty_set():
     assert eligible_source_keys([]) == set()
 
 
-def test_low_impressions_still_eligible_as_source():
-    # The gate governs deactivation, not breeding: a promising new thumbnail
-    # can seed candidates before it reaches 1,000 impressions.
-    keys = eligible_source_keys([tm("old", 0.080, impressions=9000),
-                                 tm("new", 0.084, impressions=200)])
-    assert keys == {"new", "old"}
+def test_below_impression_gate_is_never_a_source():
+    keys = eligible_source_keys([tm("proven", 0.080, impressions=9000),
+                                 tm("thin", 0.084, impressions=999)])
+    assert keys == {"proven"}
+
+
+def test_exactly_at_impression_gate_qualifies():
+    assert eligible_source_keys([tm("edge", 0.08, impressions=1000)]) == {"edge"}
+
+
+def test_thin_data_outlier_does_not_raise_the_bar():
+    # A 20% qPTR on 100 impressions must not disqualify proven thumbnails.
+    keys = eligible_source_keys([tm("outlier", 0.20, impressions=100),
+                                 tm("best", 0.084, impressions=9000),
+                                 tm("near", 0.080, impressions=9000)])
+    assert keys == {"best", "near"}
+
+
+def test_no_thumbnail_clears_the_gate():
+    assert eligible_source_keys([tm("a", 0.08, impressions=500),
+                                 tm("b", 0.09, impressions=10)]) == set()
+
+
+def test_impression_gate_is_configurable():
+    thumbs = [tm("a", 0.08, impressions=500)]
+    assert eligible_source_keys(thumbs, minimum_impressions=1000) == set()
+    assert eligible_source_keys(thumbs, minimum_impressions=100) == {"a"}
 
 
 def test_gap_is_configurable():

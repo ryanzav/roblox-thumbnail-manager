@@ -304,12 +304,26 @@ Thumbnail C    7.8%    not eligible
 Thumbnail D    7.2%    not eligible
 ```
 
-A thumbnail without trustworthy metrics is never a source, because it is not
-known to be a winner. Unlike deactivation, this rule does not wait for the
-1,000-impression gate: a promising new thumbnail may seed candidates before it
-has accumulated enough traffic to be judged. If no active thumbnail has metrics
-at all, the system falls back to seeding from any active thumbnail with a
-description.
+A source must also clear the same **1,000-impression gate**. Below that its
+qPTR is not trustworthy enough to call it a winner, so it cannot seed
+candidates; a thumbnail with no metrics never qualifies either.
+
+The best qPTR is measured among qualifying thumbnails only, so a thin-data
+outlier cannot raise the bar and starve the pool:
+
+```text
+Thumbnail X    20.0%    120 impressions   ignored (below gate)
+Thumbnail A     8.4%  9,000 impressions   SOURCE (best)
+Thumbnail B     8.0%  9,000 impressions   SOURCE
+```
+
+Note the difference in scope from deactivation. Deactivation waits for *every*
+active thumbnail to reach 1,000 impressions before ranking anything. Source
+eligibility is per-thumbnail: proven winners keep breeding even while a newly
+activated thumbnail is still accumulating traffic.
+
+If no active thumbnail clears the gate with trustworthy metrics, generation is
+skipped for that run rather than seeding from unproven creatives.
 
 The generated candidate records the source thumbnail ID:
 

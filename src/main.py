@@ -109,12 +109,15 @@ def run() -> int:
 
 
 def _active_asset_ids(remote_thumbnails: list[dict]) -> list[str]:
+    # The list endpoint returns every uploaded homepage thumbnail, but Roblox
+    # serves at most 5 at a time: only entries whose personalizedConfigStatus
+    # is Active are in the current rotation.
     ids = []
     for t in remote_thumbnails:
         asset_id = t.get("assetId", t.get("thumbnailAssetId", t.get("targetId")))
-        state = str(t.get("homepageThumbnailStatus",
+        state = str(t.get("personalizedConfigStatus",
                           t.get("state", t.get("status", "active")))).lower()
-        if asset_id is not None and state in {"active", "enabled", ""}:
+        if asset_id is not None and state in {"active", "enabled"}:
             ids.append(str(asset_id))
     return ids
 

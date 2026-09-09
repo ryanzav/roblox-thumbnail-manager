@@ -170,7 +170,7 @@ A thumbnail exactly at the cutoff remains active.
 
 After weak thumbnails are deactivated, the script fills available slots using images from the local thumbnail queue.
 
-Roblox supports up to 5 active Home Page personalization thumbnails, so the target is:
+Roblox allows at most 5 thumbnails to be active at the same time, so the target is:
 
 ```text
 5 active thumbnails
@@ -1095,6 +1095,14 @@ List Home Page thumbnails:
 ```http
 GET /thumbnail-personalization-api/v1/universes/{universeId}/thumbnails
 ```
+
+This returns **every uploaded homepage thumbnail**, not just the active
+rotation — often more than 5 entries. Roblox only serves up to 5 at a
+time: an entry is in the current rotation only when its
+`personalizedConfigStatus` is `Active`. Entries with
+`personalizedConfigStatus: Inactive` are uploaded and approved but not
+currently shown, and must not be treated as active by the selection
+algorithm.
 
 Upload Home Page thumbnails:
 

@@ -76,6 +76,17 @@ def list_image_models(api_key: str) -> list[dict]:
     return models
 
 
+def _image_capable_names(cfg: Config) -> str:
+    """Names of models that advertise image generation, for error messages."""
+    try:
+        available = list_image_models(cfg.ai_image_api_key)
+    except GenerationError:
+        return ""
+    names = sorted(m["name"] for m in available
+                   if any(h in m["name"].lower() for h in _PREFERRED_HINTS))
+    return ", ".join(names)
+
+
 def _resolve_model(cfg: Config) -> dict:
     available = list_image_models(cfg.ai_image_api_key)
     if not available:
@@ -145,7 +156,8 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
                     return inline.data, model["name"]
         raise GenerationError(
             f"{model['name']} returned no image data — it may not support "
-            f"image generation")
+            f"image generation. Image-capable models on this key: "
+            f"{_image_capable_names(cfg) or 'none found'}")
     except GenerationError:
         raise
     except Exception as exc:

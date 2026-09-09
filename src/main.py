@@ -1,0 +1,242 @@
+"""One complete scheduled run. Fails conservatively: analytics problems mean
+no thumbnail mutations, and AI-generation problems never block metrics."""
+
+import logging
+import sys
+from datetime import datetime, timezone
+
+from . import history, queue as queue_mod
+from .analytics import AnalyticsError, fetch_thumbnail_metrics
+from .config import load_config
+from .dashboard import build_dashboard_data
+from .image_generator import GenerationError, generate_candidate
+from .models import ThumbnailMetrics, ThumbnailRecord
+from .prompt_builder import build_prompt, choose_source
+from .roblox_api import RobloxApi, RobloxApiError
+from .selector import choose_changes
+
+log = logging.getLogger("thumbnail-manager")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def run() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    cfg = load_config()
+    timestamp = now_iso()
+
+    records = history.load_thumbnails()
+    state = history.load_state()
+    evaluation_status = "not evaluated"
+    metrics_rows: list[ThumbnailMetrics] = []
+
+    try:
+        api = RobloxApi(cfg.roblox_api_key, cfg.roblox_universe_id)
+    except RobloxApiError as exc:
+        log.error("Cannot start: %s", exc)
+        return 1
+
+    # 1. Fetch the current active set from Roblox.
+    try:
+        remote_thumbnails = api.list_thumbnails()
+        active_asset_ids = _active_asset_ids(remote_thumbnails)
+        records = _sync_records_with_remote(records, active_asset_ids, state, timestamp)
+        log.info("Roblox reports %d active thumbnails", len(active_asset_ids))
+    except RobloxApiError as exc:
+        log.error("Could not fetch Roblox thumbnail state: %s", exc)
+        active_asset_ids = [r.roblox_asset_id for r in records
+                            if r.status == "active" and r.roblox_asset_id]
+        evaluation_status = "Roblox state unavailable; no changes made"
+
+    tracked_asset_ids = sorted({r.roblox_asset_id for r in records if r.roblox_asset_id})
+
+    # 2. Query analytics for every tracked thumbnail.
+    analytics_ok = False
+    try:
+        by_asset = fetch_thumbnail_metrics(api, tracked_asset_ids)
+        analytics_ok = True
+        key_by_asset = {r.roblox_asset_id: r.thumbnail_key for r in records}
+        status_by_asset = {r.roblox_asset_id: r.status for r in records}
+        for asset_id, m in by_asset.items():
+            m.thumbnail_key = key_by_asset.get(asset_id, "")
+            m.status = ("active" if asset_id in active_asset_ids
+                        else status_by_asset.get(asset_id, "inactive"))
+            metrics_rows.append(m)
+        history.append_metrics(timestamp, metrics_rows)
+        log.info("Recorded metrics for %d thumbnails", len(metrics_rows))
+    except AnalyticsError as exc:
+        log.error("Analytics unavailable: %s — no performance-based decisions", exc)
+        evaluation_status = "analytics unavailable; evaluation skipped"
+
+    # 3. Evaluate the active set (only with trustworthy analytics).
+    active_metrics = [m for m in metrics_rows if m.status == "active"]
+    if analytics_ok and active_metrics:
+        result = choose_changes(active_metrics, cfg.minimum_impressions, cfg.qptr_gap_decimal)
+        evaluation_status = result.reason
+        if result.eligible and result.deactivate:
+            names = [m.thumbnail_key or m.roblox_asset_id for m in result.deactivate]
+            if cfg.allow_thumbnail_deactivation:
+                _apply_deactivation(api, cfg, records, result.deactivate,
+                                    active_asset_ids, timestamp)
+            else:
+                evaluation_status = (
+                    f"would deactivate {', '.join(names)} (deactivation disabled)"
+                )
+                log.info(evaluation_status)
+        elif result.eligible:
+            evaluation_status = "all active thumbnails within threshold"
+
+    # 4. Fill open slots from the queue.
+    if cfg.allow_thumbnail_uploads:
+        _fill_slots(api, cfg, records, state, timestamp)
+
+    # 5. Replenish the AI queue. Failures here never fail the run.
+    if cfg.allow_ai_generation:
+        try:
+            _replenish_queue(cfg, records, metrics_rows, state)
+        except Exception as exc:
+            log.error("Queue replenishment failed (continuing): %s", exc)
+
+    # 6. Persist and publish.
+    state["last_successful_run"] = timestamp
+    history.save_thumbnails(records)
+    history.save_state(state)
+    build_dashboard_data(cfg, metrics_rows, evaluation_status, queue_mod.queue_size())
+    log.info("Run complete. Evaluation: %s", evaluation_status)
+    return 0
+
+
+def _active_asset_ids(remote_thumbnails: list[dict]) -> list[str]:
+    ids = []
+    for t in remote_thumbnails:
+        asset_id = t.get("thumbnailAssetId", t.get("assetId", t.get("targetId")))
+        state = str(t.get("state", t.get("status", "active"))).lower()
+        if asset_id is not None and state in {"active", "enabled", ""}:
+            ids.append(str(asset_id))
+    return ids
+
+
+def _sync_records_with_remote(records: list[ThumbnailRecord], active_asset_ids: list[str],
+                              state: dict, timestamp: str) -> list[ThumbnailRecord]:
+    """Reconcile the registry with the live active set; auto-register unknowns."""
+    known = {r.roblox_asset_id for r in records if r.roblox_asset_id}
+    for asset_id in active_asset_ids:
+        if asset_id not in known:
+            seq = state.get("next_thumbnail_sequence", 1)
+            state["next_thumbnail_sequence"] = seq + 1
+            records.append(ThumbnailRecord(
+                thumbnail_key=f"thumb-{seq:03d}",
+                roblox_asset_id=asset_id,
+                activated_at=timestamp,
+                status="active",
+            ))
+            log.info("Registered previously unknown active thumbnail %s", asset_id)
+    for r in records:
+        if r.roblox_asset_id in active_asset_ids:
+            if r.status != "active":
+                r.status = "active"
+                r.activated_at = r.activated_at or timestamp
+        elif r.status == "active":
+            r.status = "inactive"
+            r.deactivated_at = r.deactivated_at or timestamp
+    return records
+
+
+def _apply_deactivation(api: RobloxApi, cfg, records: list[ThumbnailRecord],
+                        to_deactivate, active_asset_ids: list[str], timestamp: str) -> None:
+    remove_ids = {m.roblox_asset_id for m in to_deactivate}
+    keep_ids = [a for a in active_asset_ids if a not in remove_ids]
+    try:
+        api.update_personalization(keep_ids)
+    except RobloxApiError as exc:
+        log.error("Deactivation update failed; active set unchanged: %s", exc)
+        return
+    active_asset_ids[:] = keep_ids
+    for r in records:
+        if r.roblox_asset_id in remove_ids:
+            r.status = "inactive"
+            r.deactivated_at = timestamp
+    log.info("Deactivated %d thumbnails", len(remove_ids))
+
+
+def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
+                state: dict, timestamp: str) -> None:
+    active = [r for r in records if r.status == "active"]
+    open_slots = cfg.target_active_thumbnails - len(active)
+    if open_slots <= 0:
+        return
+    for candidate in queue_mod.list_candidates()[:open_slots]:
+        try:
+            upload = api.upload_thumbnail(str(candidate["path"]))
+            status = api.wait_for_upload()
+            asset_id = str(
+                upload.get("thumbnailAssetId")
+                or upload.get("assetId")
+                or status.get("thumbnailAssetId")
+                or status.get("assetId")
+                or ""
+            )
+            if not asset_id:
+                log.error("Upload of %s gave no asset id; leaving it queued",
+                          candidate["filename"])
+                continue
+            current = [r.roblox_asset_id for r in records if r.status == "active"]
+            api.update_personalization(current + [asset_id])
+        except RobloxApiError as exc:
+            log.error("Activation of %s failed; leaving it queued: %s",
+                      candidate["filename"], exc)
+            continue
+
+        seq = state.get("next_thumbnail_sequence", 1)
+        state["next_thumbnail_sequence"] = seq + 1
+        key = f"thumb-{seq:03d}"
+        final_name = f"{key}.png"
+        queue_mod.archive_candidate(candidate, final_name)
+        records.append(ThumbnailRecord(
+            thumbnail_key=key,
+            roblox_asset_id=asset_id,
+            filename=final_name,
+            description=candidate["description"],
+            prompt=candidate["prompt"],
+            source_thumbnail_id=candidate["source_thumbnail_id"],
+            generated_at=candidate["generated_at"],
+            activated_at=timestamp,
+            status="active",
+        ))
+        log.info("Activated %s as %s (asset %s)", candidate["filename"], key, asset_id)
+
+
+def _replenish_queue(cfg, records: list[ThumbnailRecord],
+                     metrics_rows: list[ThumbnailMetrics], state: dict) -> None:
+    deficit = cfg.queue_target_size - queue_mod.queue_size()
+    if deficit <= 0:
+        return
+    active_records = [r for r in records if r.status == "active"]
+    qptr_by_key = {m.thumbnail_key: m.qualified_ptr for m in metrics_rows
+                   if m.qualified_ptr is not None}
+    generated = 0
+    for _ in range(deficit):
+        source = choose_source(active_records, qptr_by_key,
+                               cfg.source_thumbnail_selection)
+        if source is None:
+            log.warning("No active thumbnail has a description; cannot generate")
+            return
+        seq = state.get("next_candidate_sequence", 1)
+        state["next_candidate_sequence"] = seq + 1
+        filename = f"candidate-{seq:03d}.png"
+        prompt = build_prompt(source)
+        try:
+            generate_candidate(cfg, prompt, filename,
+                               description=source.description,
+                               source_thumbnail_id=source.thumbnail_key)
+            generated += 1
+        except GenerationError as exc:
+            log.error("Generation failed for %s: %s", filename, exc)
+            break
+    log.info("Generated %d new candidates", generated)
+
+
+if __name__ == "__main__":
+    sys.exit(run())

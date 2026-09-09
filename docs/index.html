@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roblox Thumbnail Performance</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Roblox Thumbnail Performance</h1>
+    <div id="overview" class="overview"></div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Active Thumbnails</h2>
+      <div id="gate-banner"></div>
+      <div id="active-cards" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Leaderboard</h2>
+      <table id="leaderboard">
+        <thead>
+          <tr><th>Rank</th><th>Thumbnail</th><th>Impressions</th><th>Qualified PTR</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Qualified Play Through Rate over time</h2>
+      <div class="chart-wrap"><canvas id="chart-qptr"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Impressions over time</h2>
+      <div class="chart-wrap"><canvas id="chart-impressions"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Qualified Plays over time</h2>
+      <div class="chart-wrap"><canvas id="chart-plays"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Generation Lineage</h2>
+      <div id="lineage" class="lineage"></div>
+    </section>
+
+    <section>
+      <h2>Full Creative History</h2>
+      <div id="history-cards" class="cards"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

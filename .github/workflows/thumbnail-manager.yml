@@ -1,0 +1,54 @@
+name: Roblox Thumbnail Manager
+
+on:
+  schedule:
+    # GitHub scheduled workflows use UTC.
+    # Run every 6 hours, away from the top of the hour.
+    - cron: "17 */6 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: roblox-thumbnail-manager
+  cancel-in-progress: false
+
+jobs:
+  manage-thumbnails:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run thumbnail manager
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          ROBLOX_UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+          AI_IMAGE_API_KEY: ${{ secrets.AI_IMAGE_API_KEY }}
+        run: python -m src.main
+
+      - name: Commit updated history, dashboard, and queue
+        run: |
+          git config user.name "roblox-thumbnail-bot"
+          git config user.email "roblox-thumbnail-bot@users.noreply.github.com"
+
+          git add data thumbnails/queue docs
+
+          if git diff --cached --quiet; then
+            echo "No repository changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update thumbnail metrics and queue"
+          git push

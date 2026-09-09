@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-09-09T02:41:32Z",
+  "prompt": "Create a new Roblox game thumbnail inspired by this existing\nthumbnail concept:\n\n\"A cute, fluffy green caterpillar smiles up at a metallic gold, stained-glass butterfly resting on a white daisy. Shot from a low macro perspective, this 3D digital render features vibrant greens, golds, and soft outdoor lighting. The scene is set outdoors against a dreamy, blurred garden background filled with moss and clovers.\"\n\nCreate a visually distinct variation rather than a duplicate.\nPreserve the game's visual identity while changing composition,\ncamera angle, subject emphasis, background arrangement, or\nsupporting elements. Make it attractive at Roblox thumbnail size.\n16:9 composition. No text unless specifically requested.",
+  "description": "A cute, fluffy green caterpillar smiles up at a metallic gold, stained-glass butterfly resting on a white daisy. Shot from a low macro perspective, this 3D digital render features vibrant greens, golds, and soft outdoor lighting. The scene is set outdoors against a dreamy, blurred garden background filled with moss and clovers.",
+  "source_thumbnail_id": "thumb-010",
+  "provider": "gemini",
+  "model": "gemini-3.1-flash-lite-image",
+  "filename": "candidate-012.png",
+  "status": "queued"
+}

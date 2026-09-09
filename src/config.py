@@ -76,6 +76,7 @@ def load_config(path: Path | None = None) -> Config:
     cfg.notify_email = os.environ.get("NOTIFY_EMAIL", "")
     cfg.smtp_user = os.environ.get("SMTP_USER", "")
     cfg.smtp_password = os.environ.get("SMTP_PASSWORD", "")
-    cfg.smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    cfg.smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    # Unset GitHub Actions variables arrive as empty strings, not absent.
+    cfg.smtp_host = os.environ.get("SMTP_HOST") or "smtp.gmail.com"
+    cfg.smtp_port = int(os.environ.get("SMTP_PORT") or 587)
     return cfg

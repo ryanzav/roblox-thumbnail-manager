@@ -1,9 +1,9 @@
 {
-  "last_update": "2026-09-10T16:22:30Z",
+  "last_update": "2026-09-10T20:49:46Z",
   "active_count": 5,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": 0.02877938002347946,
+  "best_qptr": 0.029560530558228493,
   "evaluation_status": "all active thumbnails within threshold",
   "gate_impressions": 1000
 }

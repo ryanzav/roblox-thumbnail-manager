@@ -1,9 +1,9 @@
 {
-  "last_update": "2026-09-09T21:11:07Z",
+  "last_update": "2026-09-10T04:38:13Z",
   "active_count": 5,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": null,
-  "evaluation_status": "analytics unavailable; evaluation skipped",
+  "best_qptr": 0.03085966221988201,
+  "evaluation_status": "evaluation performed",
   "gate_impressions": 1000
 }

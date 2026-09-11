@@ -48,6 +48,8 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
 
     The extension comes from the returned image data, not from the caller,
     because providers differ in the format they produce.
+    
+    Raises GenerationError if the image fails moderation checks.
     """
     if cfg.image_provider != "gemini":
         raise GenerationError(f"Unknown image provider: {cfg.image_provider}")
@@ -67,6 +69,22 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
             time.sleep(delay)
 
     filename = stem + detect_format(image_bytes)[0]
+
+    # Perform moderation check on the generated image
+    try:
+        from .image_moderation import check_image_safety
+        result = check_image_safety(cfg, image_bytes)
+        if not result["safe"]:
+            raise GenerationError(
+                f"Generated image rejected by moderation: {result['reason']} "
+                f"(categories: {', '.join(result['categories'])})")
+        log.debug("Generated image %s passed moderation check", filename)
+    except GenerationError:
+        raise
+    except Exception as exc:
+        log.warning("Moderation check failed for %s (continuing): %s", 
+                   filename, exc)
+        # Fail open on moderation errors - allow the image to proceed
 
     metadata = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -191,4 +209,3 @@ def _generate_gemini(cfg: Config, prompt: str) -> tuple[bytes, str]:
     except Exception as exc:
         raise GenerationError(
             f"Generation failed on {model['name']}: {type(exc).__name__}: {exc}") from exc
-

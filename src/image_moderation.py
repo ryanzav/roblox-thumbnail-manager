@@ -69,7 +69,7 @@ Respond with ONLY a JSON object in this exact format (no markdown, no extra text
 If safe, return empty categories list."""
         
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",
             contents=[
                 prompt,
                 types.Part(inline_data=types.Blob(mime_type="image/png", data=image_bytes))

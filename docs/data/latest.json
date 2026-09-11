@@ -1,9 +1,9 @@
 {
-  "last_update": "2026-09-11T22:32:39Z",
+  "last_update": "2026-09-11T23:19:08Z",
   "active_count": 5,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": 0.03068862296640873,
-  "evaluation_status": "waiting for 1,000 impressions: thumb-021 (391), thumb-022 (418), thumb-020 (434)",
+  "best_qptr": 0.031030960324273806,
+  "evaluation_status": "evaluation performed",
   "gate_impressions": 1000
 }

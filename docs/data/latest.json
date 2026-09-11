@@ -1,9 +1,9 @@
 {
-  "last_update": "2026-09-11T11:17:52Z",
+  "last_update": "2026-09-11T16:25:56Z",
   "active_count": 5,
   "target_active": 5,
   "queue_size": 0,
-  "best_qptr": 0.032390445470809937,
-  "evaluation_status": "evaluation performed",
+  "best_qptr": 0.031028807163238525,
+  "evaluation_status": "gate closed: Roblox reports no analytics for thumb-020, thumb-021, thumb-022",
   "gate_impressions": 1000
 }

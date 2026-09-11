@@ -27,7 +27,10 @@ METRIC_FIELD = {
     "ThumbnailWinningSegments": "winning_segments",
 }
 
-INT_FIELDS = {"impressions", "qualified_plays", "winning_segments"}
+# Metrics where we take the most recent value (cumulative or rate)
+CUMULATIVE_FIELDS = {"impressions", "qualified_plays"}
+# Metrics where we take the last value (rates and segments)
+RATE_FIELDS = {"qualified_ptr", "l7_qualified_ptr", "average_session_minutes", "winning_segments"}
 
 
 class AnalyticsError(Exception):
@@ -79,8 +82,10 @@ def fetch_thumbnail_metrics(api: RobloxApi, asset_ids: list[str],
 def _merge_metric(results: dict[str, ThumbnailMetrics], metric: str, data: dict) -> None:
     """Fold one metric's datapoints into the per-asset result map.
 
-    The Analytics Query API returns grouped time series; we keep the most
-    recent non-null value per asset (rates) or the sum (counts).
+    The Analytics Query API returns grouped time series. For cumulative metrics
+    (impressions, qualified plays), we take the most recent value since it's
+    already cumulative from the API. For rates and averages, we take the most
+    recent non-null value.
     """
     field = METRIC_FIELD[metric]
     for group in _iter_groups(data):
@@ -93,12 +98,17 @@ def _merge_metric(results: dict[str, ThumbnailMetrics], metric: str, data: dict)
         ]
         if not values:
             continue
-        if field in INT_FIELDS and field != "winning_segments":
-            value = int(sum(values))
-        elif field == "winning_segments":
+        
+        # For cumulative metrics and rates, take the most recent (last) value
+        # The API returns cumulative values already, so we don't sum them
+        if field in CUMULATIVE_FIELDS:
             value = int(values[-1])
+        elif field in RATE_FIELDS:
+            value = int(values[-1]) if field == "winning_segments" else float(values[-1])
         else:
-            value = float(values[-1])
+            # Fallback for unknown fields
+            value = int(values[-1]) if field in {"impressions", "qualified_plays"} else float(values[-1])
+        
         setattr(results[asset_id], field, value)
 
 

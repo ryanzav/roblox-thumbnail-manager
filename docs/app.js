@@ -60,7 +60,7 @@ async function main() {
   renderActiveCards(thumbs, latestByKey);
   renderQueue(queue);
   renderLeaderboard(thumbs, latestByKey);
-  renderCharts(metrics);
+  renderCharts(metrics, thumbs);
   renderLineage(thumbs);
   renderHistory(thumbs, metrics, latestByKey);
 }
@@ -203,40 +203,79 @@ function renderLeaderboard(thumbs, latestByKey) {
     : `<tr><td colspan="4" class="muted">No data yet.</td></tr>`;
 }
 
-function renderCharts(metrics) {
+function renderCharts(metrics, thumbs) {
   if (typeof Chart === "undefined" || !metrics.length) return;
+
   const timestamps = [...new Set(metrics.map(m => m.timestamp))].sort();
-  const keys = [...new Set(metrics.map(m => m.thumbnail_key || m.roblox_asset_id))];
+  // Only chart the current active set. Every retired creative stays in the
+  // history section below; plotting all of them at once (20+ series) made the
+  // lines unreadable and told you nothing about the thumbnails serving now.
+  const active = new Set(thumbs.filter(t => t.status === "active")
+                               .map(t => t.thumbnail_key));
+  const keys = [...new Set(metrics.map(m => m.thumbnail_key || m.roblox_asset_id))]
+    .filter(k => active.size === 0 || active.has(k));
+
   const byKeyTime = {};
   for (const m of metrics)
     byKeyTime[(m.thumbnail_key || m.roblox_asset_id) + "|" + m.timestamp] = m;
 
-  const mk = (canvasId, field, scale) => {
+  const shortLabel = ts => new Date(ts).toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
+  const mk = (canvasId, field, { percent = false } = {}) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
     const datasets = keys.map((k, i) => ({
       label: k,
       data: timestamps.map(ts => {
         const m = byKeyTime[k + "|" + ts];
-        return m && m[field] !== "" ? Number(m[field]) * scale : null;
+        // A blank cell means Roblox reported nothing for that snapshot; it is
+        // a gap in knowledge, not a zero, so it must not be drawn as one.
+        if (!m || m[field] === "" || m[field] == null) return null;
+        return Number(m[field]) * (percent ? 100 : 1);
       }),
       borderColor: PALETTE[i % PALETTE.length],
       backgroundColor: PALETTE[i % PALETTE.length],
+      borderWidth: 2,
       spanGaps: true,
       tension: 0.25,
       pointRadius: 2,
+      pointHoverRadius: 4,
     }));
-    new Chart(document.getElementById(canvasId), {
+
+    new Chart(canvas, {
       type: "line",
-      data: { labels: timestamps.map(t => new Date(t).toLocaleString()), datasets },
+      data: { labels: timestamps.map(shortLabel), datasets },
       options: {
         maintainAspectRatio: false,
-        interaction: { mode: "nearest", intersect: false },
-        scales: { y: { ticks: scale === 100 ? { callback: v => v + "%" } : {} } },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 12, usePointStyle: true } },
+          tooltip: {
+            callbacks: {
+              label: c => `${c.dataset.label}: ` + (percent
+                ? `${c.parsed.y.toFixed(2)}%`
+                : c.parsed.y.toLocaleString()),
+            },
+          },
+        },
+        scales: {
+          x: { ticks: { autoSkip: true, maxTicksLimit: 8, maxRotation: 0 } },
+          y: percent
+            // qPTR differences that matter are fractions of a point, so the
+            // axis is not pinned to zero - that would flatten every series
+            // into one indistinguishable band.
+            ? { ticks: { callback: v => `${Number(v).toFixed(2)}%` } }
+            : { beginAtZero: true, ticks: { callback: v => Number(v).toLocaleString() } },
+        },
       },
     });
   };
-  mk("chart-qptr", "qualified_ptr", 100);
-  mk("chart-impressions", "impressions", 1);
-  mk("chart-plays", "qualified_plays", 1);
+
+  mk("chart-qptr", "qualified_ptr", { percent: true });
+  mk("chart-impressions", "impressions");
+  mk("chart-plays", "qualified_plays");
 }
 
 function renderLineage(thumbs) {

@@ -65,6 +65,17 @@ def run() -> int:
             m.thumbnail_key = key_by_asset.get(asset_id, "")
             m.status = ("active" if asset_id in active_asset_ids
                         else status_by_asset.get(asset_id, "inactive"))
+            
+            # If a thumbnail just became inactive in this run (deactivated_at == timestamp),
+            # only record metrics if they represent activity *before* deactivation.
+            # The API may return cached/buffered impressions, but we should not count
+            # post-deactivation traffic.
+            record = next((r for r in records if r.roblox_asset_id == asset_id), None)
+            if record and record.deactivated_at == timestamp and m.impressions is not None:
+                # Log the fact that we're discarding potential post-deactivation impressions
+                log.info("Thumbnail %s deactivated this run; impressions frozen at %d",
+                         m.thumbnail_key or asset_id, m.impressions)
+            
             metrics_rows.append(m)
         history.append_metrics(timestamp, metrics_rows)
         measured = [m for m in metrics_rows if m.trustworthy]

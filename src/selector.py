@@ -29,11 +29,17 @@ def eligible_source_keys(active_thumbnails: list[ThumbnailMetrics],
 
 def choose_changes(active_thumbnails: list[ThumbnailMetrics],
                    minimum_impressions: int = 1000,
-                   qptr_gap: float = 0.005) -> SelectionResult:
+                   qptr_gap: float = 0.005,
+                   deactivate_bottom_n: int = 3) -> SelectionResult:
     """Decide which active thumbnails to deactivate.
 
+    Deactivates thumbnails based on two criteria:
+    1. Range criterion: thumbnails whose qPTR is more than qptr_gap below the best
+    2. Bottom N criterion: the lowest-performing deactivate_bottom_n thumbnails
+       (if there are enough active thumbnails)
+
     qptr_gap is a decimal rate (0.005 == 0.5 percentage points).
-    A thumbnail exactly at the cutoff remains active.
+    A thumbnail exactly at the cutoff remains active (range criterion only).
     """
     if not active_thumbnails:
         return SelectionResult(eligible=False, reason="no active thumbnails")
@@ -59,7 +65,21 @@ def choose_changes(active_thumbnails: list[ThumbnailMetrics],
 
     best_qptr = max(t.qualified_ptr for t in active_thumbnails)
     cutoff = best_qptr - qptr_gap
+    
+    # Deactivate thumbnails below the range cutoff
     deactivate = [t for t in active_thumbnails if t.qualified_ptr < cutoff]
+    
+    # Additionally deactivate the bottom N performers if there are enough actives
+    # Only apply bottom-N criterion if we have more than the minimum needed
+    if len(active_thumbnails) > deactivate_bottom_n:
+        # Sort by qPTR (ascending) to find the worst performers
+        sorted_by_qptr = sorted(active_thumbnails, key=lambda t: t.qualified_ptr)
+        bottom_n_candidates = sorted_by_qptr[:deactivate_bottom_n]
+        
+        # Add bottom-N thumbnails to deactivation list if not already there
+        for thumb in bottom_n_candidates:
+            if thumb not in deactivate:
+                deactivate.append(thumb)
 
     return SelectionResult(
         eligible=True,

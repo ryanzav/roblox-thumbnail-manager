@@ -42,14 +42,12 @@ class EmptyGenerationError(GenerationError):
     """
 
 
-def generate_candidate(cfg: Config, prompt: str, stem: str,
-                       source_description: str, source_thumbnail_id: str) -> str:
-    """Generate one 16:9 candidate, save it into the queue, return filename.
+def generate_image(cfg: Config, prompt: str) -> tuple[bytes, str]:
+    """Generate one 16:9 image and return (bytes, model used).
 
-    The extension comes from the returned image data, not from the caller,
-    because providers differ in the format they produce.
-    
-    Raises GenerationError if the image fails moderation checks.
+    Retries, provider dispatch and moderation live here rather than in
+    generate_candidate() so the queue-free paths - local tooling, tests - run
+    exactly the same pipeline as a scheduled run.
     """
     if cfg.image_provider != "gemini":
         raise GenerationError(f"Unknown image provider: {cfg.image_provider}")
@@ -68,9 +66,16 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
                         exc, delay, attempt + 1, attempts)
             time.sleep(delay)
 
-    filename = stem + detect_format(image_bytes)[0]
+    _moderate(cfg, image_bytes)
+    return image_bytes, model_used
 
-    # Perform moderation check on the generated image
+
+def _moderate(cfg: Config, image_bytes: bytes) -> None:
+    """Reject an image Roblox would likely refuse.
+
+    Fails open: if the check itself errors, the image proceeds, so a
+    moderation outage cannot stall generation.
+    """
     try:
         from .image_moderation import check_image_safety
         result = check_image_safety(cfg, image_bytes)
@@ -78,13 +83,21 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
             raise GenerationError(
                 f"Generated image rejected by moderation: {result['reason']} "
                 f"(categories: {', '.join(result['categories'])})")
-        log.debug("Generated image %s passed moderation check", filename)
     except GenerationError:
         raise
     except Exception as exc:
-        log.warning("Moderation check failed for %s (continuing): %s", 
-                   filename, exc)
-        # Fail open on moderation errors - allow the image to proceed
+        log.warning("Moderation check failed (continuing): %s", exc)
+
+
+def generate_candidate(cfg: Config, prompt: str, stem: str,
+                       source_description: str, source_thumbnail_id: str) -> str:
+    """Generate one candidate, save it into the queue, return its filename.
+
+    The extension comes from the returned image data, not from the caller,
+    because providers differ in the format they produce.
+    """
+    image_bytes, model_used = generate_image(cfg, prompt)
+    filename = stem + detect_format(image_bytes)[0]
 
     metadata = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

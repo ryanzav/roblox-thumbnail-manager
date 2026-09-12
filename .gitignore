@@ -15,3 +15,6 @@ thumbnails/queue/*
 # Local copies are kept as a backup but never committed.
 docs/images/thumbnails/*
 !docs/images/thumbnails/.gitkeep
+
+# Locally generated images from scripts/generate.py
+generated/

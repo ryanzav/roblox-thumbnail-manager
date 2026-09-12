@@ -589,6 +589,25 @@ To preview the dashboard:
 python -m http.server 8000 -d docs
 ```
 
+## Generating images by hand
+
+`scripts/generate.py` runs the same generation pipeline as a scheduled run -
+prompt building, model resolution, retries, moderation - but writes to
+`generated/` by default, so nothing reaches the game.
+
+```bash
+scripts/generate.py --list-sources              # creatives usable as a seed
+scripts/generate.py --list-models               # image models your key can use
+scripts/generate.py --source thumb-001 --count 3
+scripts/generate.py --describe "A stone lighthouse at dusk"
+scripts/generate.py --prompt "..." --model gemini-3.1-flash-image
+scripts/generate.py --source thumb-001 --dry-run   # print the prompt only
+```
+
+`--queue` writes into `thumbnails/queue/` instead, which means the next run
+uploads and activates the image on the live game. Everything else is local:
+`generated/` is gitignored and never read by a run.
+
 ---
 
 # Staged Rollout

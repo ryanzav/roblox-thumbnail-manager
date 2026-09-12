@@ -4,7 +4,7 @@ on:
   schedule:
     # GitHub scheduled workflows use UTC.
     # Run every 1 hours, away from the top of the hour.
-    - cron: "17 */1 * * *"
+    - cron: "17 * * * *"
 
   workflow_dispatch:
 

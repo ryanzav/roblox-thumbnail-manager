@@ -30,6 +30,31 @@ function parseCSV(text) {
     Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
 }
 
+const CHART_PICK_KEY = "chartSeries";
+
+// Retired creatives the viewer has pinned onto the charts, remembered per
+// browser. Storage can throw (private windows, blocked site data), so every
+// access is guarded and the page works with nothing stored.
+function loadPicked() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CHART_PICK_KEY) || "[]"));
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function savePicked(picked) {
+  try {
+    localStorage.setItem(CHART_PICK_KEY, JSON.stringify([...picked]));
+  } catch (e) {
+    /* not fatal: the selection simply will not survive a reload */
+  }
+}
+
+let picked = loadPicked();
+let chartSource = { metrics: [], thumbs: [] };
+const chartInstances = {};
+
 const fmtInt = v => v === "" || v == null ? "—" : Number(v).toLocaleString();
 const fmtPct = v => v === "" || v == null ? "—" : (Number(v) * 100).toFixed(2) + "%";
 const fmtMin = v => v === "" || v == null ? "—" : Number(v).toFixed(1) + " min";
@@ -60,6 +85,7 @@ async function main() {
   renderActiveCards(thumbs, latestByKey);
   renderQueue(queue);
   renderLeaderboard(thumbs, latestByKey);
+  chartSource = { metrics, thumbs };
   renderCharts(metrics, thumbs);
   renderLineage(thumbs);
   renderHistory(thumbs, metrics, latestByKey);
@@ -126,6 +152,16 @@ function renderGateBanner(latest, latestByKey, thumbs) {
   }
 }
 
+function chartToggleHTML(t, alwaysOn) {
+  const checked = alwaysOn || picked.has(t.thumbnail_key) ? " checked" : "";
+  const disabled = alwaysOn ? " disabled" : "";
+  const note = alwaysOn ? "Charted (active)" : "Show in charts";
+  return `<label class="chart-toggle"${alwaysOn ? ' title="Active thumbnails are always charted"' : ""}>
+    <input type="checkbox" data-chart-key="${t.thumbnail_key}"${checked}${disabled}>
+    <span>${note}</span>
+  </label>`;
+}
+
 function cardHTML(t, m, opts = {}) {
   const img = t.filename
     ? `<img src="images/thumbnails/${t.filename}" alt="${t.thumbnail_key}"
@@ -154,6 +190,7 @@ function cardHTML(t, m, opts = {}) {
         ${t.thumbnail_key}${t.roblox_asset_id ? " · asset " + t.roblox_asset_id : ""}
         ${t.source_thumbnail_id ? "<br>Source: " + t.source_thumbnail_id : ""}
       </div>
+      ${opts.chartToggle ? chartToggleHTML(t, opts.alwaysCharted) : ""}
     </div>
   </div>`;
 }
@@ -213,7 +250,7 @@ function renderCharts(metrics, thumbs) {
   const active = new Set(thumbs.filter(t => t.status === "active")
                                .map(t => t.thumbnail_key));
   const keys = [...new Set(metrics.map(m => m.thumbnail_key || m.roblox_asset_id))]
-    .filter(k => active.size === 0 || active.has(k));
+    .filter(k => active.has(k) || picked.has(k) || (active.size === 0 && !picked.size));
 
   const byKeyTime = {};
   for (const m of metrics)
@@ -226,6 +263,9 @@ function renderCharts(metrics, thumbs) {
   const mk = (canvasId, field, { percent = false } = {}) => {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
+    // Chart.js refuses a canvas that still owns a chart, so the previous
+    // instance must go before a re-render.
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
     const datasets = keys.map((k, i) => ({
       label: k,
       data: timestamps.map(ts => {
@@ -244,7 +284,7 @@ function renderCharts(metrics, thumbs) {
       pointHoverRadius: 4,
     }));
 
-    new Chart(canvas, {
+    chartInstances[canvasId] = new Chart(canvas, {
       type: "line",
       data: { labels: timestamps.map(shortLabel), datasets },
       options: {
@@ -313,8 +353,22 @@ function renderHistory(thumbs, metrics, latestByKey) {
     const best = mine.reduce((acc, m) =>
       m.qualified_ptr !== "" && (acc == null || Number(m.qualified_ptr) > acc)
         ? Number(m.qualified_ptr) : acc, null);
-    return cardHTML(t, latestByKey[t.thumbnail_key], { history: true, bestQptr: best });
+    return cardHTML(t, latestByKey[t.thumbnail_key], {
+      history: true, bestQptr: best,
+      chartToggle: true, alwaysCharted: t.status === "active",
+    });
   }).join("");
+
+  // One delegated listener survives re-renders of the card markup.
+  el.onchange = (event) => {
+    const box = event.target.closest("input[data-chart-key]");
+    if (!box) return;
+    const key = box.dataset.chartKey;
+    if (box.checked) picked.add(key);
+    else picked.delete(key);
+    savePicked(picked);
+    renderCharts(chartSource.metrics, chartSource.thumbs);
+  };
 }
 
 main();

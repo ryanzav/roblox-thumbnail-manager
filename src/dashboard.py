@@ -1,7 +1,6 @@
 """Prepares the data consumed by the static GitHub Pages dashboard."""
 
 import json
-import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +19,8 @@ LATEST_JSON = DOCS_DATA_DIR / "latest.json"
 def build_dashboard_data(cfg: Config, metrics: list[ThumbnailMetrics],
                          evaluation_status: str, queue_count: int,
                          docs_data_dir: Path = DOCS_DATA_DIR,
-                         records: list[ThumbnailRecord] | None = None) -> None:
+                         records: list[ThumbnailRecord] | None = None,
+                         image_urls: dict[str, str] | None = None) -> None:
     docs_data_dir.mkdir(parents=True, exist_ok=True)
 
     for src in (METRICS_CSV, THUMBNAILS_CSV):
@@ -38,6 +38,12 @@ def build_dashboard_data(cfg: Config, metrics: list[ThumbnailMetrics],
     best = max((m.qualified_ptr for m in active if m.qualified_ptr is not None), default=None)
 
     publish_queue_preview(docs_data_dir)
+
+    # Thumbnails are served from Roblox's CDN rather than committed to the
+    # repository, so the dashboard needs this map refreshed each run. Written
+    # even when empty, so a stale map is never left behind.
+    (docs_data_dir / "images.json").write_text(
+        json.dumps(image_urls or {}, indent=2) + "\n")
 
     latest = {
         "last_update": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -64,7 +70,6 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
     for c in candidates:
         entries.append({
             "filename": c["filename"],
-            "url": queue_image_url(c["filename"]),
             "generated_at": c["generated_at"],
             "prompt": c["prompt"],
             "source_description": c["source_description"],
@@ -78,15 +83,3 @@ def publish_queue_preview(docs_data_dir: Path = DOCS_DATA_DIR,
     return entries
 
 
-def queue_image_url(filename: str) -> str:
-    """Where the dashboard should load a queued candidate from.
-
-    Queued images live only in thumbnails/queue/, which GitHub Pages does not
-    publish (it serves docs/ alone), so the dashboard reads them straight from
-    the repository instead of keeping a second copy under docs/.
-    """
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    branch = os.environ.get("GITHUB_REF_NAME", "main")
-    if repo:
-        return f"https://raw.githubusercontent.com/{repo}/{branch}/thumbnails/queue/{filename}"
-    return f"../thumbnails/queue/{filename}"

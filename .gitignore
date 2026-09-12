@@ -10,3 +10,8 @@ __pycache__/
 # Generated candidates are working files, not repository content.
 thumbnails/queue/*
 !thumbnails/queue/.gitkeep
+
+# Thumbnails are served from Roblox's CDN, not from the repository.
+# Local copies are kept as a backup but never committed.
+docs/images/thumbnails/*
+!docs/images/thumbnails/.gitkeep

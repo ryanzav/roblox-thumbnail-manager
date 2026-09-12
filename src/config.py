@@ -23,6 +23,7 @@ DEFAULTS = {
     "allow_ai_descriptions": True,
     "description_model": "gemini-3.6-flash",
     "generation_retries": 3,
+    "keep_local_images": True,
 }
 
 
@@ -41,6 +42,7 @@ class Config:
     allow_ai_descriptions: bool
     description_model: str
     generation_retries: int
+    keep_local_images: bool
 
     roblox_api_key: str = field(default="", repr=False)
     roblox_universe_id: str = ""

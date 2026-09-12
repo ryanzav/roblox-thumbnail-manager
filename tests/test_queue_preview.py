@@ -22,7 +22,7 @@ def test_queue_preview_publishes_metadata_without_copying_images(tmp_path, monke
     published = json.loads((docs_data / "queue.json").read_text())
     assert published == entries
     assert published[0]["source_thumbnail_id"] == "thumb-001"
-    assert published[0]["url"].endswith("thumbnails/queue/candidate-001.png")
+    assert "url" not in published[0]
 
 
 def test_empty_queue_publishes_empty_list(tmp_path, monkeypatch):
@@ -34,13 +34,20 @@ def test_empty_queue_publishes_empty_list(tmp_path, monkeypatch):
     assert json.loads((docs_data / "queue.json").read_text()) == []
 
 
-def test_queue_image_url_uses_repo_when_running_in_actions(monkeypatch):
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setenv("GITHUB_REF_NAME", "main")
-    assert dashboard.queue_image_url("c.png") == (
-        "https://raw.githubusercontent.com/owner/repo/main/thumbnails/queue/c.png")
+def test_queue_entries_carry_metadata_but_no_image_url(tmp_path, monkeypatch):
+    """A queued candidate has not been uploaded to Roblox, so it has no CDN
+    URL, and images are no longer committed for the dashboard to link to."""
+    qdir = tmp_path / "queue"
+    qdir.mkdir()
+    (qdir / "candidate-001.png").write_bytes(b"img")
+    (qdir / "candidate-001.json").write_text(json.dumps({
+        "generated_at": "2026-09-12T00:00:00Z", "prompt": "a prompt",
+        "source_thumbnail_id": "thumb-001",
+    }))
+    monkeypatch.setattr(queue_mod, "QUEUE_DIR", qdir)
 
-
-def test_queue_image_url_falls_back_to_relative_path(monkeypatch):
-    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
-    assert dashboard.queue_image_url("c.png") == "../thumbnails/queue/c.png"
+    entries = dashboard.publish_queue_preview(tmp_path / "docs" / "data",
+                                              tmp_path / "unused")
+    assert entries[0]["filename"] == "candidate-001.png"
+    assert entries[0]["prompt"] == "a prompt"
+    assert "url" not in entries[0]

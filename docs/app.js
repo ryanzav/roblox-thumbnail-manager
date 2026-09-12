@@ -70,11 +70,12 @@ async function fetchText(url) {
 }
 
 async function main() {
-  let metrics = [], thumbs = [], latest = {}, queue = [];
+  let metrics = [], thumbs = [], latest = {}, queue = [], imageUrls = {};
   try { metrics = parseCSV(await fetchText("data/metrics.csv")); } catch (e) { console.warn(e); }
   try { thumbs = parseCSV(await fetchText("data/thumbnails.csv")); } catch (e) { console.warn(e); }
   try { latest = JSON.parse(await fetchText("data/latest.json")); } catch (e) { console.warn(e); }
   try { queue = JSON.parse(await fetchText("data/queue.json")); } catch (e) { console.warn(e); }
+  try { imageUrls = JSON.parse(await fetchText("data/images.json")); } catch (e) { console.warn(e); }
 
   const latestByKey = {};
   for (const m of metrics) {
@@ -82,6 +83,7 @@ async function main() {
     if (!latestByKey[key] || m.timestamp >= latestByKey[key].timestamp) latestByKey[key] = m;
   }
 
+  thumbnailUrls = imageUrls;
   renderGeneratedAt(latest);
   renderOverview(latest, thumbs, latestByKey);
   renderGateBanner(latest, latestByKey, thumbs);
@@ -155,6 +157,15 @@ function renderGateBanner(latest, latestByKey, thumbs) {
   }
 }
 
+// Thumbnails come from Roblox's CDN so they need not be committed; a local
+// archived copy is used when one happens to be present (local development).
+let thumbnailUrls = {};
+
+function thumbnailSrc(t) {
+  return thumbnailUrls[t.thumbnail_key] ||
+         (t.filename ? `images/thumbnails/${t.filename}` : "");
+}
+
 function chartToggleHTML(t, alwaysOn) {
   const checked = alwaysOn || picked.has(t.thumbnail_key) ? " checked" : "";
   const disabled = alwaysOn ? " disabled" : "";
@@ -166,8 +177,9 @@ function chartToggleHTML(t, alwaysOn) {
 }
 
 function cardHTML(t, m, opts = {}) {
-  const img = t.filename
-    ? `<img src="images/thumbnails/${t.filename}" alt="${t.thumbnail_key}"
+  const src = thumbnailSrc(t);
+  const img = src
+    ? `<img src="${src}" alt="${t.thumbnail_key}" loading="lazy"
         onerror="this.outerHTML='<div class=&quot;no-image&quot;>no image</div>'">`
     : `<div class="no-image">no image</div>`;
   const rows = [
@@ -216,8 +228,6 @@ function renderQueue(queue) {
     return;
   }
   el.innerHTML = queue.map(c => `<div class="card">
-    <img src="${c.url || `images/queue/${c.filename}`}" alt="${c.filename}"
-      onerror="this.outerHTML='<div class=&quot;no-image&quot;>no image</div>'">
     <div class="body">
       <div class="status queued">QUEUED</div>
       <div class="desc">${c.filename}</div>
@@ -318,7 +328,8 @@ function renderCharts(metrics, thumbs) {
   // Archived images are served from docs/, queued ones from the repository.
   const images = {};
   for (const t of thumbs) {
-    if (t.filename) images[t.thumbnail_key] = `images/thumbnails/${t.filename}`;
+    const src = thumbnailSrc(t);
+    if (src) images[t.thumbnail_key] = src;
   }
 
   const lifespan = {};

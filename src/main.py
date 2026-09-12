@@ -129,12 +129,13 @@ def run() -> int:
     if generated_any and cfg.allow_thumbnail_uploads:
         _fill_slots(api, cfg, records, state, timestamp)
 
-    # 6. Mirror Roblox-hosted thumbnail images locally so the dashboard can
-    # show them. Best-effort: image problems never fail the run.
+    # 6. Resolve thumbnail image URLs for the dashboard. Best-effort: image
+    # problems never fail the run.
+    image_urls = {}
     try:
-        _download_missing_images(api, records)
+        image_urls = _refresh_images(api, cfg, records)
     except Exception as exc:
-        log.warning("Thumbnail image mirroring failed (continuing): %s", exc)
+        log.warning("Thumbnail image lookup failed (continuing): %s", exc)
 
     # 7. Fill in missing descriptions with Gemini vision so every creative
     # can seed future candidates. Best-effort, never fails the run.
@@ -149,7 +150,7 @@ def run() -> int:
     history.save_thumbnails(records)
     history.save_state(state)
     build_dashboard_data(cfg, metrics_rows, evaluation_status, queue_mod.queue_size(),
-                         records=records)
+                         records=records, image_urls=image_urls)
     log.info("Run complete. Evaluation: %s", evaluation_status)
     return 0
 
@@ -309,26 +310,45 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
         log.info("Activated %s as %s (asset %s)", candidate["filename"], key, asset_id)
 
 
-def _download_missing_images(api: RobloxApi, records: list[ThumbnailRecord]) -> None:
-    missing = [r for r in records if r.roblox_asset_id
-               and (not r.filename or not (queue_mod.ARCHIVE_DIR / r.filename).exists())]
-    if not missing:
-        return
-    urls = api.fetch_asset_image_urls([r.roblox_asset_id for r in missing])
-    queue_mod.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    for r in missing:
+def _refresh_images(api: RobloxApi, cfg, records: list[ThumbnailRecord]) -> dict[str, str]:
+    """Resolve every tracked creative to a Roblox CDN image URL.
+
+    The dashboard loads thumbnails from Roblox rather than from the repository,
+    so the images need not be committed. The URLs are time-limited (180-day
+    tokens), which is why they are refreshed on every run rather than stored
+    once in the registry.
+
+    A local copy is still kept when keep_local_images is set, so the repository
+    working tree remains a backup even though Git no longer carries it.
+    """
+    tracked = [r for r in records if r.roblox_asset_id]
+    if not tracked:
+        return {}
+
+    urls = api.fetch_asset_image_urls([r.roblox_asset_id for r in tracked])
+    by_key = {}
+    for r in tracked:
         url = urls.get(r.roblox_asset_id)
-        if not url:
-            continue
-        try:
-            image = api.download_image(url)
-        except Exception as exc:
-            log.warning("Could not download image for %s: %s", r.thumbnail_key, exc)
-            continue
-        filename = r.filename or f"{r.thumbnail_key}.png"
-        (queue_mod.ARCHIVE_DIR / filename).write_bytes(image)
-        r.filename = filename
-        log.info("Mirrored image for %s", r.thumbnail_key)
+        if url:
+            by_key[r.thumbnail_key] = url
+        if not r.filename:
+            r.filename = f"{r.thumbnail_key}.png"
+
+    if cfg.keep_local_images:
+        queue_mod.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        for r in tracked:
+            path = queue_mod.ARCHIVE_DIR / r.filename
+            url = by_key.get(r.thumbnail_key)
+            if path.exists() or not url:
+                continue
+            try:
+                path.write_bytes(api.download_image(url))
+                log.info("Saved local copy of %s", r.thumbnail_key)
+            except Exception as exc:
+                log.warning("Could not save image for %s: %s", r.thumbnail_key, exc)
+
+    log.info("Resolved %d/%d thumbnail image URLs", len(by_key), len(tracked))
+    return by_key
 
 
 def _describe_missing(cfg, records: list[ThumbnailRecord]) -> None:

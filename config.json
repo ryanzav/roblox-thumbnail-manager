@@ -11,5 +11,6 @@
   "image_model": "gemini-3-pro-image",
   "allow_ai_descriptions": true,
   "description_model": "gemini-3.6-flash",
-  "generation_retries": 3
+  "generation_retries": 3,
+  "keep_local_images": true
 }

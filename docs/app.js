@@ -256,6 +256,17 @@ function renderCharts(metrics, thumbs) {
   for (const m of metrics)
     byKeyTime[(m.thumbnail_key || m.roblox_asset_id) + "|" + m.timestamp] = m;
 
+  // Every run records a snapshot for every tracked creative, active or not, so
+  // a thumbnail retired days ago still has rows up to today. Those rows are a
+  // rolling 30-day window, not current performance, so each series is bounded
+  // to the span the creative was actually serving.
+  const lifespan = {};
+  for (const t of thumbs) {
+    const from = t.activated_at ? new Date(t.activated_at).getTime() : -Infinity;
+    const to = t.deactivated_at ? new Date(t.deactivated_at).getTime() : Infinity;
+    lifespan[t.thumbnail_key] = { from, to };
+  }
+
   const shortLabel = ts => new Date(ts).toLocaleString(undefined, {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
@@ -272,14 +283,20 @@ function renderCharts(metrics, thumbs) {
       // taken at irregular intervals, and an evenly-spaced category axis put
       // a day with 32 runs beside a day with 4 at the same width, so nothing
       // sat under the date it was actually recorded on.
-      data: timestamps.map(ts => {
+      data: timestamps.reduce((points, ts) => {
+        const at = new Date(ts).getTime();
+        const span = lifespan[k];
+        // Dropped entirely rather than nulled, so the line stops at
+        // deactivation instead of being bridged across by spanGaps.
+        if (span && (at < span.from || at > span.to)) return points;
         const m = byKeyTime[k + "|" + ts];
         // A blank cell means Roblox reported nothing for that snapshot; it is
         // a gap in knowledge, not a zero, so it must not be drawn as one.
         const raw = m ? m[field] : null;
         const y = raw === "" || raw == null ? null : Number(raw) * (percent ? 100 : 1);
-        return { x: new Date(ts).getTime(), y };
-      }),
+        points.push({ x: at, y });
+        return points;
+      }, []),
       borderColor: PALETTE[i % PALETTE.length],
       backgroundColor: PALETTE[i % PALETTE.length],
       borderWidth: 2,

@@ -77,10 +77,17 @@ def run() -> int:
                          m.thumbnail_key or asset_id, m.impressions)
             
             metrics_rows.append(m)
-        history.append_metrics(timestamp, metrics_rows)
-        measured = [m for m in metrics_rows if m.trustworthy]
-        log.info("Recorded metrics for %d thumbnails (%d with data)",
-                 len(metrics_rows), len(measured))
+        # Only the serving set is recorded. A retired creative's numbers are a
+        # rolling 30-day window that keeps drifting after it stopped serving,
+        # so further snapshots add no information and grow the history without
+        # bound. Anything retired later in this run is still active here, so
+        # its final snapshot is captured.
+        recorded = [m for m in metrics_rows if m.status == "active"]
+        history.append_metrics(timestamp, recorded)
+        measured = [m for m in recorded if m.trustworthy]
+        log.info("Recorded metrics for %d active thumbnails (%d with data); "
+                 "%d retired creative(s) not re-recorded",
+                 len(recorded), len(measured), len(metrics_rows) - len(recorded))
         # Roblox returns no analytics rows at all for a thumbnail that has
         # received no traffic, which is indistinguishable from a lookup miss
         # unless it is called out explicitly.

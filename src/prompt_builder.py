@@ -38,6 +38,14 @@ LIGHTING_VARIATIONS = [
     "Use backlighting to create silhouettes and depth.",
 ]
 
+# Subject variations
+SUBJECT_VARIATIONS = [
+    "Beautiful butterflies in the distance.",
+    "A beautiful rainbow is visible in the distance.",
+    "A beautiful butterfly hovers nearby.",
+    "A very cute yellow chick and baby owl look friendly.",
+    "Delicious looking frosted donut with sprinkles are laid across the landscape.",
+]
 
 def build_prompt(source: ThumbnailRecord, rng: random.Random | None = None) -> str:
     """Build a prompt with randomized stylistic variations for diversity."""
@@ -47,8 +55,9 @@ def build_prompt(source: ThumbnailRecord, rng: random.Random | None = None) -> s
     style = rng.choice(STYLE_VARIATIONS)
     composition = rng.choice(COMPOSITION_VARIATIONS)
     lighting = rng.choice(LIGHTING_VARIATIONS)
+    subject = rng.choice(SUBJECT_VARIATIONS)
     
-    variation = f"\n{style}\n{composition}\n{lighting}"
+    variation = f"\n{subject}\n{style}\n{composition}\n{lighting}"
     
     return PROMPT_TEMPLATE.format(
         description=source.description.strip(),

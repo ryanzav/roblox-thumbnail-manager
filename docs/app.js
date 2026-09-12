@@ -268,12 +268,17 @@ function renderCharts(metrics, thumbs) {
     if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
     const datasets = keys.map((k, i) => ({
       label: k,
+      // {x, y} points rather than a value per category slot: snapshots are
+      // taken at irregular intervals, and an evenly-spaced category axis put
+      // a day with 32 runs beside a day with 4 at the same width, so nothing
+      // sat under the date it was actually recorded on.
       data: timestamps.map(ts => {
         const m = byKeyTime[k + "|" + ts];
         // A blank cell means Roblox reported nothing for that snapshot; it is
         // a gap in knowledge, not a zero, so it must not be drawn as one.
-        if (!m || m[field] === "" || m[field] == null) return null;
-        return Number(m[field]) * (percent ? 100 : 1);
+        const raw = m ? m[field] : null;
+        const y = raw === "" || raw == null ? null : Number(raw) * (percent ? 100 : 1);
+        return { x: new Date(ts).getTime(), y };
       }),
       borderColor: PALETTE[i % PALETTE.length],
       backgroundColor: PALETTE[i % PALETTE.length],
@@ -286,7 +291,7 @@ function renderCharts(metrics, thumbs) {
 
     chartInstances[canvasId] = new Chart(canvas, {
       type: "line",
-      data: { labels: timestamps.map(shortLabel), datasets },
+      data: { datasets },
       options: {
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
@@ -294,6 +299,7 @@ function renderCharts(metrics, thumbs) {
           legend: { position: "bottom", labels: { boxWidth: 12, usePointStyle: true } },
           tooltip: {
             callbacks: {
+              title: items => items.length ? shortLabel(items[0].parsed.x) : "",
               label: c => `${c.dataset.label}: ` + (percent
                 ? `${c.parsed.y.toFixed(2)}%`
                 : c.parsed.y.toLocaleString()),
@@ -301,7 +307,11 @@ function renderCharts(metrics, thumbs) {
           },
         },
         scales: {
-          x: { ticks: { autoSkip: true, maxTicksLimit: 8, maxRotation: 0 } },
+          x: {
+            type: "time",
+            time: { unit: "day", tooltipFormat: "MMM d, h:mm a" },
+            ticks: { autoSkip: true, maxTicksLimit: 10, maxRotation: 0 },
+          },
           y: percent
             // qPTR differences that matter are fractions of a point, so the
             // axis is not pinned to zero - that would flatten every series

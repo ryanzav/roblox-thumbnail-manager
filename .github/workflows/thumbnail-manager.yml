@@ -45,6 +45,7 @@ jobs:
 
       - name: Commit updated history, dashboard, and queue
         run: |
+          echo "Running cron job."
           git config user.name "roblox-thumbnail-bot"
           git config user.email "roblox-thumbnail-bot@users.noreply.github.com"
 

@@ -27,12 +27,19 @@ def test_one_below_gate_blocks_deactivation():
 
 
 def test_cutoff_boundaries():
+    """The range criterion alone, with the bottom-N rule switched off.
+
+    Both rules apply together in production; isolating this one is the only
+    way to pin the 0.5-point boundary, since bottom-N would retire these
+    regardless of how close they are.
+    """
     # best 8.4% -> cutoff 7.9%
     best = tm("best", 5000, 0.084)
     keep_above = tm("k1", 5000, 0.0791)
     keep_exact = tm("k2", 5000, 0.0790)
     remove = tm("r", 5000, 0.0789)
-    result = choose_changes([best, keep_above, keep_exact, remove])
+    result = choose_changes([best, keep_above, keep_exact, remove],
+                            deactivate_bottom_n=0)
     assert result.eligible
     keys = {t.thumbnail_key for t in result.deactivate}
     assert keys == {"r"}
@@ -53,12 +60,48 @@ def test_missing_metrics_closes_gate():
 
 
 def test_multiple_weak_removed():
+    """Range criterion in isolation: everything more than 0.5 points back."""
     result = choose_changes([
         tm("a", 8900, 0.084), tm("b", 7400, 0.080), tm("c", 5800, 0.076),
         tm("d", 3400, 0.077), tm("e", 1200, 0.082),
-    ])
+    ], deactivate_bottom_n=0)
     assert result.eligible
     assert {t.thumbnail_key for t in result.deactivate} == {"c", "d"}
+
+
+def test_bottom_three_are_retired_even_when_tightly_grouped():
+    """The bottom-N rule ignores closeness, so a near-leader is still cut.
+
+    With five active thumbnails all within 0.05 points, the range criterion
+    would keep every one; bottom-N retires three anyway.
+    """
+    result = choose_changes([
+        tm("a", 5000, 0.0840), tm("b", 5000, 0.0839), tm("c", 5000, 0.0838),
+        tm("d", 5000, 0.0837), tm("e", 5000, 0.0836),
+    ])
+    assert result.eligible
+    assert {t.thumbnail_key for t in result.deactivate} == {"c", "d", "e"}
+
+
+def test_the_two_criteria_are_unioned_without_duplicates():
+    result = choose_changes([
+        tm("best", 5000, 0.084), tm("near", 5000, 0.0835), tm("mid", 5000, 0.083),
+        tm("weak", 5000, 0.070), tm("worst", 5000, 0.060),
+    ])
+    assert result.eligible
+    # weak and worst fail both rules; mid is added by bottom-N alone.
+    assert {t.thumbnail_key for t in result.deactivate} == {"mid", "weak", "worst"}
+    assert len(result.deactivate) == 3, "a thumbnail failing both rules is listed once"
+
+
+def test_bottom_n_does_not_empty_a_small_active_set():
+    """With no more actives than N, the bottom-N rule is skipped entirely,
+    so the range criterion decides alone and the set is never wiped out."""
+    result = choose_changes([
+        tm("a", 5000, 0.084), tm("b", 5000, 0.0838), tm("c", 5000, 0.0836),
+    ])
+    assert result.eligible
+    assert result.deactivate == []
 
 
 def test_gate_message_names_thumbnails_without_analytics():

@@ -55,6 +55,9 @@ let picked = loadPicked();
 let chartSource = { metrics: [], thumbs: [] };
 const chartInstances = {};
 
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
 const fmtInt = v => v === "" || v == null ? "—" : Number(v).toLocaleString();
 const fmtPct = v => v === "" || v == null ? "—" : (Number(v) * 100).toFixed(2) + "%";
 const fmtMin = v => v === "" || v == null ? "—" : Number(v).toFixed(1) + " min";
@@ -184,12 +187,13 @@ function cardHTML(t, m, opts = {}) {
     ${img}
     <div class="body">
       <div class="status ${t.status}">${(t.status || "").toUpperCase()}</div>
-      <div class="desc">${t.description || t.thumbnail_key}</div>
+      <div class="desc">${esc(t.description) || t.thumbnail_key}</div>
       <table>${rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("")}</table>
       <div class="lineage-note">
         ${t.thumbnail_key}${t.roblox_asset_id ? " · asset " + t.roblox_asset_id : ""}
         ${t.source_thumbnail_id ? "<br>Source: " + t.source_thumbnail_id : ""}
       </div>
+      ${t.prompt ? `<details class="prompt"><summary>Prompt used</summary>${esc(t.prompt)}</details>` : ""}
       ${opts.chartToggle ? chartToggleHTML(t, opts.alwaysCharted) : ""}
     </div>
   </div>`;
@@ -222,8 +226,8 @@ function renderQueue(queue) {
         <tr><td class="muted">Model</td><td>${c.model || "—"}</td></tr>
         <tr><td class="muted">Source</td><td>${c.source_thumbnail_id || "—"}</td></tr>
       </table>
-      ${c.source_description ? `<details class="prompt"><summary>Source description</summary>${c.source_description}</details>` : ""}
-      ${c.prompt ? `<details class="prompt"><summary>Prompt</summary>${c.prompt}</details>` : ""}
+      ${c.source_description ? `<details class="prompt"><summary>Source description</summary>${esc(c.source_description)}</details>` : ""}
+      ${c.prompt ? `<details class="prompt"><summary>Prompt used</summary>${esc(c.prompt)}</details>` : ""}
     </div>
   </div>`).join("");
 }

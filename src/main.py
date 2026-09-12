@@ -12,7 +12,7 @@ from .dashboard import build_dashboard_data
 from .describer import DescriptionError, describe_image
 from .image_generator import GenerationError, generate_candidate
 from .models import ThumbnailMetrics, ThumbnailRecord
-from .notify import notify_new_image
+from .notify import notify_new_images
 from .prompt_builder import build_prompt, choose_source
 from .roblox_api import RobloxApi, RobloxApiError
 from .selector import choose_changes, eligible_source_keys
@@ -366,6 +366,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
     active_records = [r for r in active_records if r.thumbnail_key in winners]
     log.info("Generating from top performers: %s", ", ".join(sorted(winners)))
     generated = 0
+    produced: list = []
     for _ in range(deficit):
         source = choose_source(active_records, qptr_by_key,
                                cfg.source_thumbnail_selection)
@@ -381,12 +382,14 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
                                           description=source.description,
                                           source_thumbnail_id=source.thumbnail_key)
             log.info("Generated %s from %s", filename, source.thumbnail_key)
-            notify_new_image(cfg, queue_mod.QUEUE_DIR / filename)
+            produced.append(queue_mod.QUEUE_DIR / filename)
             generated += 1
         except GenerationError as exc:
             log.error("Generation failed for %s: %s", stem, exc)
             break
     log.info("Generated %d new candidates", generated)
+    # One email per run, however many candidates it produced.
+    notify_new_images(cfg, produced)
     return generated
 
 

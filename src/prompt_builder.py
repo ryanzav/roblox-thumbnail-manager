@@ -55,9 +55,12 @@ def build_prompt(source: ThumbnailRecord, rng: random.Random | None = None) -> s
     style = rng.choice(STYLE_VARIATIONS)
     composition = rng.choice(COMPOSITION_VARIATIONS)
     lighting = rng.choice(LIGHTING_VARIATIONS)
-    subject = rng.choice(SUBJECT_VARIATIONS)
+    # One to five subject lines, sampled without replacement so a prompt never
+    # repeats the same element, and shuffled so ordering carries no bias.
+    count = rng.randint(1, min(5, len(SUBJECT_VARIATIONS)))
+    subject = "\n".join(rng.sample(SUBJECT_VARIATIONS, count))
     
-    variation = f"\n{subject}\n{style}\n{composition}\n{lighting}"
+    variation = f"{subject}\n{style}\n{composition}\n{lighting}"
     
     return PROMPT_TEMPLATE.format(
         description=source.description.strip(),

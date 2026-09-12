@@ -173,3 +173,37 @@ table#leaderboard {
 }
 
 .muted { color: var(--muted); }
+
+/* Hover preview for the over-time charts. Chart.js renders its own tooltip on
+   the canvas, which cannot contain an image, so this HTML node stands in. */
+.chart-tooltip {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 260px;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;          /* never steal the hover from the canvas */
+  transition: opacity 120ms ease;
+}
+
+.chart-tooltip img {
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: #dfe3e8;
+  flex: none;
+}
+
+.chart-tooltip .tip-key { font-weight: 600; }
+.chart-tooltip .tip-value { font-size: 15px; font-variant-numeric: tabular-nums; }
+.chart-tooltip .tip-when { color: var(--muted); }

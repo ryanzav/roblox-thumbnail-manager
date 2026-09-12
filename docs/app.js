@@ -240,6 +240,56 @@ function renderLeaderboard(thumbs, latestByKey) {
     : `<tr><td colspan="4" class="muted">No data yet.</td></tr>`;
 }
 
+// A single reusable tooltip node, created lazily and parked on the body so it
+// can overflow the chart's own box.
+function chartTooltipEl() {
+  let el = document.getElementById("chart-tooltip");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "chart-tooltip";
+    el.className = "chart-tooltip";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+// Chart.js draws its own tooltip on the canvas, which cannot hold an image, so
+// hover is rendered as HTML instead.
+function imageTooltip(images, percent) {
+  return (context) => {
+    const el = chartTooltipEl();
+    const { chart, tooltip } = context;
+    if (!tooltip.opacity) {
+      el.style.opacity = "0";
+      return;
+    }
+    const point = tooltip.dataPoints && tooltip.dataPoints[0];
+    if (!point) return;
+
+    const key = point.dataset.label;
+    const value = percent
+      ? `${point.parsed.y.toFixed(2)}%`
+      : Number(point.parsed.y).toLocaleString();
+    const when = new Date(point.parsed.x).toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+    const src = images[key];
+
+    el.innerHTML = `
+      ${src ? `<img src="${src}" alt="${key}" onerror="this.remove()">` : ""}
+      <div class="tip-body">
+        <div class="tip-key" style="color:${point.dataset.borderColor}">${key}</div>
+        <div class="tip-value">${value}</div>
+        <div class="tip-when">${when}</div>
+      </div>`;
+
+    const box = chart.canvas.getBoundingClientRect();
+    el.style.opacity = "1";
+    el.style.left = `${box.left + window.scrollX + tooltip.caretX + 12}px`;
+    el.style.top = `${box.top + window.scrollY + tooltip.caretY - 12}px`;
+  };
+}
+
 function renderCharts(metrics, thumbs) {
   if (typeof Chart === "undefined" || !metrics.length) return;
 
@@ -260,16 +310,18 @@ function renderCharts(metrics, thumbs) {
   // a thumbnail retired days ago still has rows up to today. Those rows are a
   // rolling 30-day window, not current performance, so each series is bounded
   // to the span the creative was actually serving.
+  // Archived images are served from docs/, queued ones from the repository.
+  const images = {};
+  for (const t of thumbs) {
+    if (t.filename) images[t.thumbnail_key] = `images/thumbnails/${t.filename}`;
+  }
+
   const lifespan = {};
   for (const t of thumbs) {
     const from = t.activated_at ? new Date(t.activated_at).getTime() : -Infinity;
     const to = t.deactivated_at ? new Date(t.deactivated_at).getTime() : Infinity;
     lifespan[t.thumbnail_key] = { from, to };
   }
-
-  const shortLabel = ts => new Date(ts).toLocaleString(undefined, {
-    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-  });
 
   const mk = (canvasId, field, { percent = false } = {}) => {
     const canvas = document.getElementById(canvasId);
@@ -311,16 +363,14 @@ function renderCharts(metrics, thumbs) {
       data: { datasets },
       options: {
         maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
+        // "nearest" so hovering a trace identifies that creative; "index"
+        // would report every series at once, leaving no single image to show.
+        interaction: { mode: "nearest", intersect: false },
         plugins: {
           legend: { position: "bottom", labels: { boxWidth: 12, usePointStyle: true } },
           tooltip: {
-            callbacks: {
-              title: items => items.length ? shortLabel(items[0].parsed.x) : "",
-              label: c => `${c.dataset.label}: ` + (percent
-                ? `${c.parsed.y.toFixed(2)}%`
-                : c.parsed.y.toLocaleString()),
-            },
+            enabled: false,
+            external: imageTooltip(images, percent),
           },
         },
         scales: {

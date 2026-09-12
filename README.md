@@ -431,11 +431,20 @@ The page shows:
 
 # GitHub Actions
 
-`.github/workflows/thumbnail-manager.yml` runs on a `17 */6 * * *` schedule
-(00:17, 06:17, 12:17, 18:17 UTC) and on `workflow_dispatch`. Minute 17 avoids
-the top-of-hour crush. Concurrency is limited to one run at a time, without
-cancelling in progress, so two jobs cannot edit the CSVs or the active
-configuration simultaneously.
+`.github/workflows/thumbnail-manager.yml` runs on a `17 * * * *` schedule
+(hourly, at 17 past) and on `workflow_dispatch`. Minute 17 avoids the
+top-of-hour crush.
+
+Scheduled workflows are **best-effort**: GitHub queues them on shared
+infrastructure and drops them under load, so a short interval is not honoured.
+A `*/10` cron on this repository actually fired roughly every 3-5 hours. Treat
+the schedule as an upper bound on frequency, not a guarantee, and use
+`workflow_dispatch` when a run is needed at a particular moment.
+
+Concurrency is limited to one run at a time, without cancelling in progress, so
+two jobs cannot edit the CSVs or the active configuration simultaneously. That
+does not prevent a push from elsewhere landing mid-run, which rejects the
+commit step's push, so it rebases and retries up to three times.
 
 The commit step stages `data` and `docs` only.
 

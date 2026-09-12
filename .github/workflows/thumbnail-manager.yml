@@ -2,9 +2,12 @@ name: Roblox Thumbnail Manager
 
 on:
   schedule:
-    # GitHub scheduled workflows use UTC.
-    # Run every 1 hours, away from the top of the hour.
-    - cron: "*/10 * * * *"
+    # GitHub scheduled workflows use UTC, and are best-effort: they are queued
+    # on shared infrastructure and dropped under load, so a short interval is
+    # not honoured. A "*/10" cron here actually fired every 3-5 hours.
+    # Hourly, away from the top of the hour, is about the fastest that runs
+    # dependably.
+    - cron: "17 * * * *"
 
   workflow_dispatch:
 
@@ -45,7 +48,6 @@ jobs:
 
       - name: Commit updated history, dashboard, and queue
         run: |
-          echo "Running cron job."
           git config user.name "roblox-thumbnail-bot"
           git config user.email "roblox-thumbnail-bot@users.noreply.github.com"
 
@@ -57,4 +59,18 @@ jobs:
           fi
 
           git commit -m "Update thumbnail metrics and queue"
-          git push
+
+          # The checkout can be stale by the time the run finishes - a push
+          # from elsewhere lands mid-run and the push is rejected. Rebase onto
+          # whatever arrived and try again; metrics.csv only ever gains rows,
+          # so a rebase cannot lose data.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt); rebasing onto origin/main."
+            git pull --rebase --autostash origin main || exit 1
+          done
+
+          echo "Could not push after 3 attempts."
+          exit 1

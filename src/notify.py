@@ -95,8 +95,9 @@ def _entry_lines(filename: str, meta: dict) -> list[str]:
         ("Source thumbnail", meta.get("source_thumbnail_id", "")),
     ]
     lines = [f"{label}: {value}" for label, value in rows if value not in ("", None)]
-    if meta.get("description"):
-        lines += ["", "Source description:", meta["description"]]
+    seed = meta.get("source_description") or meta.get("description")
+    if seed:
+        lines += ["", "Source description:", seed]
     if meta.get("prompt"):
         lines += ["", "Prompt:", meta["prompt"]]
     return lines

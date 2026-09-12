@@ -297,7 +297,9 @@ def _fill_slots(api: RobloxApi, cfg, records: list[ThumbnailRecord],
             thumbnail_key=key,
             roblox_asset_id=asset_id,
             filename=final_name,
-            description=candidate["description"],
+            # Left blank on purpose: _describe_missing() describes the
+            # actual generated image later in this same run.
+            description="",
             prompt=candidate["prompt"],
             source_thumbnail_id=candidate["source_thumbnail_id"],
             generated_at=candidate["generated_at"],
@@ -379,7 +381,7 @@ def _replenish_queue(cfg, records: list[ThumbnailRecord],
         prompt = build_prompt(source)
         try:
             filename = generate_candidate(cfg, prompt, stem,
-                                          description=source.description,
+                                          source_description=source.description,
                                           source_thumbnail_id=source.thumbnail_key)
             log.info("Generated %s from %s", filename, source.thumbnail_key)
             produced.append(queue_mod.QUEUE_DIR / filename)

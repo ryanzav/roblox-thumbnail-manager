@@ -43,7 +43,7 @@ class EmptyGenerationError(GenerationError):
 
 
 def generate_candidate(cfg: Config, prompt: str, stem: str,
-                       description: str, source_thumbnail_id: str) -> str:
+                       source_description: str, source_thumbnail_id: str) -> str:
     """Generate one 16:9 candidate, save it into the queue, return filename.
 
     The extension comes from the returned image data, not from the caller,
@@ -89,7 +89,10 @@ def generate_candidate(cfg: Config, prompt: str, stem: str,
     metadata = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "prompt": prompt,
-        "description": description,
+        # The seed this image was bred FROM. The new image gets its own
+        # description from Gemini vision once it is archived; copying this
+        # one forward made whole lineages share a single ancestor's text.
+        "source_description": source_description,
         "source_thumbnail_id": source_thumbnail_id,
         "provider": cfg.image_provider,
         "model": model_used,

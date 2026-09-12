@@ -70,3 +70,33 @@ def test_gap_is_configurable():
     thumbs = [tm("best", 0.084), tm("other", 0.081)]
     assert eligible_source_keys(thumbs, qptr_gap=0.005) == {"best", "other"}
     assert eligible_source_keys(thumbs, qptr_gap=0.001) == {"best"}
+
+
+def test_generated_records_do_not_inherit_the_source_description(tmp_path, monkeypatch):
+    """A candidate's queue metadata carries the SEED text, not the new image's.
+
+    Copying it onto the activated record left whole lineages sharing one
+    ancestor's description, which then re-seeded every later prompt.
+    """
+    import json
+    from src import queue as queue_mod
+
+    (tmp_path / "candidate-001.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8)
+    (tmp_path / "candidate-001.json").write_text(json.dumps({
+        "generated_at": "2026-09-12T00:00:00Z",
+        "source_description": "the ancestor's scene",
+        "source_thumbnail_id": "thumb-001",
+    }))
+    cand = queue_mod.list_candidates(tmp_path)[0]
+    assert cand["source_description"] == "the ancestor's scene"
+    assert "description" not in cand, "seed text must not masquerade as the image's own"
+
+
+def test_legacy_queue_metadata_still_readable(tmp_path):
+    """Older sidecars used "description" for the seed; keep reading them."""
+    import json
+    from src import queue as queue_mod
+
+    (tmp_path / "c.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (tmp_path / "c.json").write_text(json.dumps({"description": "old seed"}))
+    assert queue_mod.list_candidates(tmp_path)[0]["source_description"] == "old seed"

@@ -222,6 +222,7 @@ function renderQueue(queue) {
         <tr><td class="muted">Model</td><td>${c.model || "—"}</td></tr>
         <tr><td class="muted">Source</td><td>${c.source_thumbnail_id || "—"}</td></tr>
       </table>
+      ${c.source_description ? `<details class="prompt"><summary>Source description</summary>${c.source_description}</details>` : ""}
       ${c.prompt ? `<details class="prompt"><summary>Prompt</summary>${c.prompt}</details>` : ""}
     </div>
   </div>`).join("");
